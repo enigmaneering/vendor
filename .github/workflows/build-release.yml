@@ -152,7 +152,9 @@ jobs:
         run: |
           # Get latest DXC release from Microsoft
           LATEST_RELEASE=$(curl -s https://api.github.com/repos/microsoft/DirectXShaderCompiler/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/microsoft/DirectXShaderCompiler/releases/latest | grep '"browser_download_url".*dxc.*\.zip"' | grep -v pdb | sed -E 's/.*"([^"]+)".*/\1/')
           echo "Downloading DXC $LATEST_RELEASE for ${{ matrix.platform }}"
+          echo "Download URL: $DOWNLOAD_URL"
 
           # Determine the correct binary suffix
           if [ "${{ matrix.arch }}" = "arm64" ]; then
@@ -162,7 +164,6 @@ jobs:
           fi
 
           # Download the Windows release
-          DOWNLOAD_URL="https://github.com/microsoft/DirectXShaderCompiler/releases/download/${LATEST_RELEASE}/dxc_${LATEST_RELEASE}.zip"
           curl -L -o dxc.zip "$DOWNLOAD_URL"
 
           # Extract and repackage for our platform
