@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/../build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/../output}"
-DXC_VERSION="${DXC_VERSION:-v1.8.2407}"
+DXC_VERSION="${DXC_VERSION:-main}"
 
 # Detect platform
 if [[ "$OSTYPE" == "darwin"* ]]; then
