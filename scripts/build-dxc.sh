@@ -60,18 +60,12 @@ if [ -n "$CMAKE_ARCH" ]; then
     CMAKE_ARCH_FLAG="-A $CMAKE_ARCH"
 fi
 
-# DXC needs specific LLVM targets, not "host"
-# Use AArch64 for ARM64, X86 for x86_64/amd64
-LLVM_TARGET="X86"
-if [[ "$PLATFORM" == *"arm64"* ]]; then
-    LLVM_TARGET="AArch64"
-fi
-
 echo "Configuring DXC..."
+# Note: DXC manages its own LLVM target configuration
+# Don't specify LLVM_TARGETS_TO_BUILD - DXC's build system handles it
 cmake .. \
     $CMAKE_ARCH_FLAG \
     -DCMAKE_BUILD_TYPE=Release \
-    -DLLVM_TARGETS_TO_BUILD="$LLVM_TARGET" \
     -DLLVM_INCLUDE_TESTS=OFF \
     -DLLVM_INCLUDE_EXAMPLES=OFF \
     -DLLVM_BUILD_TOOLS=OFF \
