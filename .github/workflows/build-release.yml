@@ -15,6 +15,7 @@ jobs:
   build-glslang:
     name: Build glslang
     strategy:
+      fail-fast: true
       matrix:
         include:
           - os: macos-latest
@@ -62,6 +63,7 @@ jobs:
   build-spirv-cross:
     name: Build SPIRV-Cross
     strategy:
+      fail-fast: true
       matrix:
         include:
           - os: macos-latest
@@ -109,6 +111,7 @@ jobs:
   build-dxc:
     name: Build DXC
     strategy:
+      fail-fast: true
       matrix:
         include:
           - os: macos-latest
@@ -129,8 +132,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install older GCC for DXC compatibility (ARM64)
-        if: matrix.platform == 'linux-arm64'
+      - name: Install older GCC for DXC compatibility (Linux)
+        if: startsWith(matrix.platform, 'linux-')
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-11 g++-11
@@ -155,6 +158,7 @@ jobs:
   download-dxc-windows:
     name: Download DXC (Windows)
     strategy:
+      fail-fast: true
       matrix:
         include:
           - platform: windows-amd64
