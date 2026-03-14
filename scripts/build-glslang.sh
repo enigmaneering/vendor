@@ -71,18 +71,20 @@ CMAKE_SYSTEM_PROCESSOR=""
 CMAKE_C_COMPILER=""
 CMAKE_CXX_COMPILER=""
 
-# Windows cross-compilation
-if [ -n "$CMAKE_ARCH" ]; then
-    CMAKE_ARCH_FLAG="-A $CMAKE_ARCH"
-fi
-
 # macOS cross-compilation (arm64 runner can build x86_64)
 if [ -n "$MACOS_ARCH" ]; then
     CMAKE_OSX_ARCH_FLAG="-DCMAKE_OSX_ARCHITECTURES=$MACOS_ARCH"
 fi
 
+# Windows uses -A for architecture
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+    if [ -n "$CMAKE_ARCH" ]; then
+        CMAKE_ARCH_FLAG="-A $CMAKE_ARCH"
+    fi
+fi
+
 # Linux cross-compilation for ARM64
-if [ -n "$CMAKE_ARCH" ] && [ "$CMAKE_ARCH" = "aarch64" ]; then
+if [[ "$OSTYPE" == "linux-gnu"* ]] && [ -n "$CMAKE_ARCH" ] && [ "$CMAKE_ARCH" = "aarch64" ]; then
     CMAKE_SYSTEM_PROCESSOR="-DCMAKE_SYSTEM_PROCESSOR=aarch64"
     CMAKE_C_COMPILER="-DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc"
     CMAKE_CXX_COMPILER="-DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++"
