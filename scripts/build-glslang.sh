@@ -101,10 +101,11 @@ find . -name "*.h" -o -name "*.hpp" | while read header; do
     cp "$header" "$PACKAGE_DIR/$header"
 done
 
-# Create tarball
+# Create archive
 cd "$OUTPUT_DIR"
 if [[ "$PLATFORM" == windows-* ]]; then
-    zip -r "glslang-${PLATFORM}.zip" "glslang-$PLATFORM"
+    # Use PowerShell Compress-Archive on Windows (zip not available in Git Bash)
+    powershell -Command "Compress-Archive -Path 'glslang-$PLATFORM' -DestinationPath 'glslang-${PLATFORM}.zip' -Force"
     echo "Created: glslang-${PLATFORM}.zip"
 else
     tar -czf "glslang-${PLATFORM}.tar.gz" "glslang-$PLATFORM"

@@ -100,10 +100,11 @@ else
     find bin -name "*.dylib" -exec cp {} "$PACKAGE_DIR/bin/" \; 2>/dev/null || true
 fi
 
-# Create tarball
+# Create archive
 cd "$OUTPUT_DIR"
 if [[ "$PLATFORM" == windows-* ]]; then
-    zip -r "dxc-${PLATFORM}.zip" "dxc-$PLATFORM"
+    # Use PowerShell Compress-Archive on Windows (zip not available in Git Bash)
+    powershell -Command "Compress-Archive -Path 'dxc-$PLATFORM' -DestinationPath 'dxc-${PLATFORM}.zip' -Force"
     echo "Created: dxc-${PLATFORM}.zip"
 else
     tar -czf "dxc-${PLATFORM}.tar.gz" "dxc-$PLATFORM"

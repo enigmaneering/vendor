@@ -82,10 +82,11 @@ find . -name "*.h" -o -name "*.hpp" | while read header; do
     cp "$header" "$PACKAGE_DIR/$header"
 done
 
-# Create tarball
+# Create archive
 cd "$OUTPUT_DIR"
 if [[ "$PLATFORM" == windows-* ]]; then
-    zip -r "spirv-cross-${PLATFORM}.zip" "spirv-cross-$PLATFORM"
+    # Use PowerShell Compress-Archive on Windows (zip not available in Git Bash)
+    powershell -Command "Compress-Archive -Path 'spirv-cross-$PLATFORM' -DestinationPath 'spirv-cross-${PLATFORM}.zip' -Force"
     echo "Created: spirv-cross-${PLATFORM}.zip"
 else
     tar -czf "spirv-cross-${PLATFORM}.tar.gz" "spirv-cross-$PLATFORM"
