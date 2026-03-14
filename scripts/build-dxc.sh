@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/../build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/../output}"
-DXC_VERSION="${DXC_VERSION:-main}"
+DXC_VERSION="${DXC_VERSION:-v1.8.2407}"
 
 # Detect platform
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -91,8 +91,6 @@ if [[ "$OSTYPE" == "linux-gnu"* ]] && [ -n "$CMAKE_ARCH" ] && [ "$CMAKE_ARCH" = 
 fi
 
 echo "Configuring DXC..."
-# DXC only needs DXIL target, not full LLVM targets
-# Setting to "None" avoids the default AMDGPU target that doesn't exist in DXC
 cmake .. \
     $CMAKE_ARCH_FLAG \
     $CMAKE_OSX_ARCH_FLAG \
@@ -100,22 +98,14 @@ cmake .. \
     $CMAKE_C_COMPILER \
     $CMAKE_CXX_COMPILER \
     -DCMAKE_BUILD_TYPE=Release \
-    -DLLVM_TARGETS_TO_BUILD="None" \
+    -DLLVM_TARGETS_TO_BUILD="host" \
     -DLLVM_INCLUDE_TESTS=OFF \
     -DLLVM_INCLUDE_EXAMPLES=OFF \
     -DLLVM_BUILD_TOOLS=OFF \
     -DCLANG_BUILD_TOOLS=OFF \
     -DLLVM_BUILD_UTILS=OFF \
     -DENABLE_SPIRV_CODEGEN=ON \
-    -DSPIRV_BUILD_TESTS=OFF \
-    -DLLVM_ENABLE_EH=ON \
-    -DLLVM_ENABLE_RTTI=ON \
-    -DHLSL_ENABLE_ANALYZE=OFF \
-    -DHLSL_ENABLE_FIXED_VER=ON \
-    -DHLSL_BUILD_DXILCONV=OFF \
-    -DCLANG_INCLUDE_TESTS=OFF \
-    -DHLSL_INCLUDE_TESTS=OFF \
-    -DHLSL_OPTIONAL_PROJS_IN_DEFAULT=OFF
+    -DSPIRV_BUILD_TESTS=OFF
 
 echo "Building DXC (this may take 10-20 minutes)..."
 cmake --build . --config Release --target dxc -j$NCPU
