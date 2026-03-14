@@ -108,8 +108,8 @@ jobs:
           name: spirv-cross-${{ matrix.platform }}
           path: ${{ runner.temp }}/output/spirv-cross-${{ matrix.platform }}.*
 
-  build-dxc:
-    name: Build DXC
+  build-dxc-macos:
+    name: Build DXC (macOS)
     strategy:
       fail-fast: true
       matrix:
@@ -122,23 +122,9 @@ jobs:
             runner: macos-14  # Cross-compile x86_64 on ARM64
             platform: darwin-amd64
             macos_arch: x86_64
-          - os: ubuntu-latest
-            runner: ubuntu-latest
-            platform: linux-amd64
-          - os: ubuntu-latest
-            runner: ubuntu-24.04-arm
-            platform: linux-arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install older GCC for DXC compatibility (Linux)
-        if: startsWith(matrix.platform, 'linux-')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-11 g++-11
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
 
       - name: Build DXC
         shell: bash
@@ -154,6 +140,40 @@ jobs:
         with:
           name: dxc-${{ matrix.platform }}
           path: ${{ runner.temp }}/output/dxc-${{ matrix.platform }}.*
+
+  download-dxc-linux:
+    name: Download DXC (Linux)
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux-amd64
+            filename: linux_dxc_2024_07_31.x86_64.tar.gz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Microsoft DXC Release
+        run: |
+          DOWNLOAD_URL="https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2407/${{ matrix.filename }}"
+          echo "Downloading DXC for ${{ matrix.platform }}"
+          echo "Download URL: $DOWNLOAD_URL"
+
+          curl -L -o dxc.tar.gz "$DOWNLOAD_URL"
+
+          # Extract and repackage
+          mkdir -p output/dxc-${{ matrix.platform }}
+          tar -xzf dxc.tar.gz -C output/dxc-${{ matrix.platform }}
+
+          # Create archive
+          cd output
+          tar -czf dxc-${{ matrix.platform }}.tar.gz dxc-${{ matrix.platform }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dxc-${{ matrix.platform }}
+          path: output/dxc-${{ matrix.platform }}.tar.gz
 
   download-dxc-windows:
     name: Download DXC (Windows)
@@ -226,7 +246,7 @@ jobs:
 
   create-release:
     name: Create Release
-    needs: [build-glslang, build-spirv-cross, build-dxc, download-dxc-windows]
+    needs: [build-glslang, build-spirv-cross, build-dxc-macos, download-dxc-linux, download-dxc-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
