@@ -135,10 +135,9 @@ cmake .. \
     -DHLSL_ENABLE_ANALYZE=OFF \
     -DHLSL_BUILD_DXILCONV=OFF
 
-echo "Building DXC and libdxcompiler (this may take 10-20 minutes)..."
-# Build both dxc binary and libdxcompiler shared library
+echo "Building DXC (this may take 10-20 minutes)..."
+# Building dxc automatically builds dxcompiler as a dependency
 cmake --build . --config Release --target dxc -j$NCPU
-cmake --build . --config Release --target libdxcompiler -j$NCPU
 
 # Package output
 PACKAGE_DIR="$OUTPUT_DIR/dxc-$PLATFORM"
