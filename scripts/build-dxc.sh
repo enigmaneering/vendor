@@ -11,11 +11,25 @@ DXC_VERSION="${DXC_VERSION:-v1.8.2407}"
 
 # Detect platform
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    PLATFORM="darwin-$(uname -m)"
+    ARCH=$(uname -m)
+    # Override with MACOS_ARCH if provided (for cross-compilation)
+    if [ -n "$MACOS_ARCH" ]; then
+        ARCH="$MACOS_ARCH"
+    fi
+    PLATFORM="darwin-$ARCH"
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     PLATFORM="linux-$(uname -m)"
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    PLATFORM="windows-$(uname -m)"
+    ARCH=$(uname -m)
+    # Override with CMAKE_ARCH if provided (for Windows builds)
+    if [ -n "$CMAKE_ARCH" ]; then
+        if [ "$CMAKE_ARCH" == "x64" ]; then
+            ARCH="x86_64"
+        elif [ "$CMAKE_ARCH" == "arm64" ]; then
+            ARCH="aarch64"
+        fi
+    fi
+    PLATFORM="windows-$ARCH"
 fi
 
 # Normalize architecture names
