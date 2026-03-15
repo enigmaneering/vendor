@@ -110,6 +110,11 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; t
         # Use the llvm-mingw Clang which has ARM64 support
         # It's extracted in the repository root during the workflow
         LLVM_MINGW_DIR="$SCRIPT_DIR/../llvm-mingw-20260311-ucrt-x86_64"
+        # Debug: print paths to understand where we are
+        echo "DEBUG: SCRIPT_DIR=$SCRIPT_DIR"
+        echo "DEBUG: LLVM_MINGW_DIR=$LLVM_MINGW_DIR"
+        echo "DEBUG: Checking for llvm-mingw in repo root..."
+        ls -la "$SCRIPT_DIR/.." | grep llvm || echo "No llvm-mingw found in $SCRIPT_DIR/.."
         # Resolve to absolute path and convert to Windows path for CMake
         if [ -d "$LLVM_MINGW_DIR" ]; then
             LLVM_MINGW_ABS="$(cd "$LLVM_MINGW_DIR" && pwd)"
