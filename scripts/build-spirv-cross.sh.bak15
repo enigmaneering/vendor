@@ -1,13 +1,13 @@
 #!/bin/bash
 set -e
 
-# Build script for glslang + SPIRV-Tools
+# Build script for SPIRV-Cross
 # Outputs a relocatable package with libraries and headers
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/../build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/../output}"
-GLSLANG_VERSION="${GLSLANG_VERSION:-main}"
+SPIRV_CROSS_VERSION="${SPIRV_CROSS_VERSION:-main}"
 
 # Detect platform
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -27,7 +27,7 @@ fi
 # Normalize architecture names
 PLATFORM=$(echo "$PLATFORM" | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
 
-echo "Building glslang for $PLATFORM..."
+echo "Building SPIRV-Cross for $PLATFORM..."
 
 # Detect number of CPU cores
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -42,31 +42,14 @@ fi
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-# Clone glslang
-if [ ! -d "glslang" ]; then
-    echo "Cloning glslang..."
-    git clone --depth 1 --branch "$GLSLANG_VERSION" https://github.com/KhronosGroup/glslang.git
+# Clone SPIRV-Cross
+if [ ! -d "spirv-cross" ]; then
+    echo "Cloning SPIRV-Cross..."
+    git clone --depth 1 --branch "$SPIRV_CROSS_VERSION" https://github.com/KhronosGroup/SPIRV-Cross.git spirv-cross
 fi
 
-# Clone SPIRV-Tools
-if [ ! -d "spirv-tools" ]; then
-    echo "Cloning SPIRV-Tools..."
-    git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Tools.git spirv-tools
-fi
-
-# Clone SPIRV-Headers (needed by SPIRV-Tools)
-if [ ! -d "spirv-tools/external/spirv-headers" ]; then
-    echo "Cloning SPIRV-Headers..."
-    git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git spirv-tools/external/spirv-headers
-fi
-
-# Create symlink for glslang to find SPIRV-Tools
-mkdir -p glslang/External
-rm -rf glslang/External/spirv-tools
-ln -sf ../../spirv-tools glslang/External/spirv-tools
-
-# Build glslang
-cd glslang
+# Build SPIRV-Cross
+cd spirv-cross
 mkdir -p build
 cd build
 
@@ -74,11 +57,11 @@ cd build
 CMAKE_ARCH_FLAG=""
 CMAKE_OSX_ARCH_FLAG=""
 CMAKE_SYSTEM_PROCESSOR=""
+CMAKE_C_FLAGS=""
+CMAKE_EXE_LINKER_FLAGS=""
+CMAKE_CXX_FLAGS=""
 CMAKE_C_COMPILER=""
 CMAKE_CXX_COMPILER=""
-CMAKE_C_FLAGS=""
-CMAKE_CXX_FLAGS=""
-CMAKE_EXE_LINKER_FLAGS=""
 
 # macOS cross-compilation (arm64 runner can build x86_64)
 if [ -n "$MACOS_ARCH" ]; then
@@ -95,8 +78,8 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; t
     if [ -n "$CROSS_COMPILE_TARGET" ] && [ "$CROSS_COMPILE_TARGET" = "aarch64" ]; then
         echo "Cross-compiling to ARM64 using Clang"
         # Use clang directly - it should be in PATH after MSYS2 installation
-        CMAKE_C_COMPILER="-DCMAKE_C_COMPILER=/mingw64/bin/clang.exe"
-        CMAKE_CXX_COMPILER="-DCMAKE_CXX_COMPILER=/mingw64/bin/clang++.exe"
+        CMAKE_C_COMPILER="-DCMAKE_C_COMPILER=clang.exe"
+        CMAKE_CXX_COMPILER="-DCMAKE_CXX_COMPILER=clang++.exe"
         CMAKE_SYSTEM_PROCESSOR="-DCMAKE_SYSTEM_PROCESSOR=aarch64"
         CMAKE_C_FLAGS="-DCMAKE_C_FLAGS=--target=aarch64-w64-mingw32"
         CMAKE_CXX_FLAGS="-DCMAKE_CXX_FLAGS=--target=aarch64-w64-mingw32"
@@ -122,17 +105,15 @@ cmake .. \
     $CMAKE_CXX_FLAGS \
     $CMAKE_EXE_LINKER_FLAGS \
     -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_SHARED_LIBS=OFF \
-    -DENABLE_SPVREMAPPER=OFF \
-    -DENABLE_GLSLANG_BINARIES=OFF \
-    -DENABLE_CTEST=OFF \
-    -DENABLE_OPT=ON \
-    -DGLSLANG_TESTS=OFF
+    -DSPIRV_CROSS_SHARED=OFF \
+    -DSPIRV_CROSS_STATIC=ON \
+    -DSPIRV_CROSS_CLI=OFF \
+    -DSPIRV_CROSS_ENABLE_TESTS=OFF
 
 cmake --build . --config Release -j$NCPU
 
 # Package output
-PACKAGE_DIR="$OUTPUT_DIR/glslang-$PLATFORM"
+PACKAGE_DIR="$OUTPUT_DIR/spirv-cross-$PLATFORM"
 mkdir -p "$PACKAGE_DIR"
 
 # Copy libraries
@@ -144,7 +125,7 @@ find . -name "*.dylib" -exec cp {} "$PACKAGE_DIR/" \;
 
 # Copy headers (preserving directory structure)
 echo "Packaging headers..."
-cd "$BUILD_DIR/glslang"
+cd "$BUILD_DIR/spirv-cross"
 find . -name "*.h" -o -name "*.hpp" | while read header; do
     mkdir -p "$PACKAGE_DIR/$(dirname "$header")"
     cp "$header" "$PACKAGE_DIR/$header"
@@ -152,7 +133,7 @@ done
 
 # Create archive
 cd "$OUTPUT_DIR"
-tar -czf "glslang-${PLATFORM}.tar.gz" "glslang-$PLATFORM"
-echo "Created: glslang-${PLATFORM}.tar.gz"
+tar -czf "spirv-cross-${PLATFORM}.tar.gz" "spirv-cross-$PLATFORM"
+echo "Created: spirv-cross-${PLATFORM}.tar.gz"
 
 echo "Build complete!"

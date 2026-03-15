@@ -65,7 +65,11 @@ jobs:
         if: matrix.mingw_arch
         shell: msys2 {0}
         run: |
-          export PATH="/mingw64/bin:$PATH"
+          echo "DEBUG: Checking for clang..."
+          which clang || echo "clang not found"
+          which clang.exe || echo "clang.exe not found"
+          ls -la /mingw64/bin/clang* || echo "No clang binaries found"
+          echo "DEBUG: PATH=$PATH"
           BUILD_DIR="${{ runner.temp }}/build" \
           OUTPUT_DIR="${{ runner.temp }}/output" \
           USE_MINGW=1 \
