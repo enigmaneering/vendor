@@ -223,15 +223,29 @@ func extractTarGz(archivePath, destDir, library, platform string) error {
 	return nil
 }
 
-// downloadLicenseFiles downloads LICENSE and README from the external repo
+// downloadLicenseFiles downloads LICENSE files and README from the external repo
 func downloadLicenseFiles(version, externalDir string) error {
-	files := []string{"LICENSES.md", "README.md"}
+	// Create LICENSES subdirectory
+	licensesDir := filepath.Join(externalDir, "LICENSES")
+	if err := os.MkdirAll(licensesDir, 0755); err != nil {
+		return fmt.Errorf("failed to create LICENSES directory: %w", err)
+	}
 
-	for _, filename := range files {
-		url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s", githubRepo, version, filename)
-		destPath := filepath.Join(externalDir, filename)
+	// Download individual license files
+	licenseFiles := []string{
+		"DXC.LICENSE",
+		"glslang.LICENSE",
+		"SPIRV-Cross.LICENSE",
+		"SPIRV-Headers.LICENSE",
+		"SPIRV-Tools.LICENSE",
+		"README.md",
+	}
 
-		fmt.Printf("Downloading %s...\n", filename)
+	for _, filename := range licenseFiles {
+		url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/LICENSES/%s", githubRepo, version, filename)
+		destPath := filepath.Join(licensesDir, filename)
+
+		fmt.Printf("Downloading LICENSES/%s...\n", filename)
 
 		resp, err := http.Get(url)
 		if err != nil {
@@ -253,8 +267,36 @@ func downloadLicenseFiles(version, externalDir string) error {
 			return fmt.Errorf("failed to write %s: %w", filename, err)
 		}
 
-		fmt.Printf("Successfully downloaded %s\n", filename)
+		fmt.Printf("Successfully downloaded LICENSES/%s\n", filename)
 	}
+
+	// Download main README.md to external root
+	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/README.md", githubRepo, version)
+	destPath := filepath.Join(externalDir, "README.md")
+
+	fmt.Printf("Downloading README.md...\n")
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to download README.md: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download README.md failed with status: %s", resp.Status)
+	}
+
+	outFile, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("failed to create README.md: %w", err)
+	}
+	defer outFile.Close()
+
+	if _, err := io.Copy(outFile, resp.Body); err != nil {
+		return fmt.Errorf("failed to write README.md: %w", err)
+	}
+
+	fmt.Printf("Successfully downloaded README.md\n")
 
 	return nil
 }
