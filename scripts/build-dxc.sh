@@ -153,9 +153,9 @@ echo "Configuring DXC..."
 # Skip the cache file entirely for ARM64 to avoid x86-specific flags
 if [ -n "$CROSS_COMPILE_TARGET" ] && [ "$CROSS_COMPILE_TARGET" = "aarch64" ]; then
     CACHE_FILE=""
-    # Set minimal flags without cf-protection
-    CMAKE_C_FLAGS_OVERRIDE="-DCMAKE_C_FLAGS=-O2 -DNDEBUG"
-    CMAKE_CXX_FLAGS_OVERRIDE="-DCMAKE_CXX_FLAGS=-O2 -DNDEBUG -std=gnu++17"
+    # Set minimal flags without cf-protection - use semicolons as CMake list separators
+    CMAKE_C_FLAGS_OVERRIDE="-DCMAKE_C_FLAGS=-O2;-DNDEBUG"
+    CMAKE_CXX_FLAGS_OVERRIDE="-DCMAKE_CXX_FLAGS=-O2;-DNDEBUG;-std=gnu++17"
 else
     CACHE_FILE="-C ../cmake/caches/PredefinedParams.cmake"
     CMAKE_C_FLAGS_OVERRIDE=""
