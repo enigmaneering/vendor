@@ -21,14 +21,6 @@ elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     PLATFORM="linux-$(uname -m)"
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
     ARCH=$(uname -m)
-    # Override with CMAKE_ARCH if provided (for Windows builds)
-    if [ -n "$CMAKE_ARCH" ]; then
-        if [ "$CMAKE_ARCH" == "x64" ]; then
-            ARCH="x86_64"
-        elif [ "$CMAKE_ARCH" == "arm64" ]; then
-            ARCH="aarch64"
-        fi
-    fi
     PLATFORM="windows-$ARCH"
 fi
 
@@ -90,11 +82,11 @@ if [ -n "$MACOS_ARCH" ]; then
     CMAKE_OSX_ARCH_FLAG="-DCMAKE_OSX_ARCHITECTURES=$MACOS_ARCH"
 fi
 
-# Windows uses -A for architecture
+# Windows uses Ninja generator with MinGW
+CMAKE_GENERATOR=""
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    if [ -n "$CMAKE_ARCH" ]; then
-        CMAKE_ARCH_FLAG="-A $CMAKE_ARCH"
-    fi
+    CMAKE_GENERATOR="-G Ninja"
+    echo "Using MinGW with Ninja generator"
 fi
 
 # Linux cross-compilation for ARM64
@@ -105,6 +97,7 @@ if [[ "$OSTYPE" == "linux-gnu"* ]] && [ -n "$CMAKE_ARCH" ] && [ "$CMAKE_ARCH" = 
 fi
 
 cmake .. \
+    $CMAKE_GENERATOR \
     $CMAKE_ARCH_FLAG \
     $CMAKE_OSX_ARCH_FLAG \
     $CMAKE_SYSTEM_PROCESSOR \
@@ -141,13 +134,7 @@ done
 
 # Create archive
 cd "$OUTPUT_DIR"
-if [[ "$PLATFORM" == windows-* ]]; then
-    # Use PowerShell Compress-Archive on Windows (zip not available in Git Bash)
-    powershell -Command "Compress-Archive -Path 'glslang-$PLATFORM' -DestinationPath 'glslang-${PLATFORM}.zip' -Force"
-    echo "Created: glslang-${PLATFORM}.zip"
-else
-    tar -czf "glslang-${PLATFORM}.tar.gz" "glslang-$PLATFORM"
-    echo "Created: glslang-${PLATFORM}.tar.gz"
-fi
+tar -czf "glslang-${PLATFORM}.tar.gz" "glslang-$PLATFORM"
+echo "Created: glslang-${PLATFORM}.tar.gz"
 
 echo "Build complete!"

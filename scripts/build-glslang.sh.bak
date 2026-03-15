@@ -1,13 +1,13 @@
 #!/bin/bash
 set -e
 
-# Build script for SPIRV-Cross
+# Build script for glslang + SPIRV-Tools
 # Outputs a relocatable package with libraries and headers
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/../build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/../output}"
-SPIRV_CROSS_VERSION="${SPIRV_CROSS_VERSION:-main}"
+GLSLANG_VERSION="${GLSLANG_VERSION:-main}"
 
 # Detect platform
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -21,13 +21,26 @@ elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     PLATFORM="linux-$(uname -m)"
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
     ARCH=$(uname -m)
-    PLATFORM="windows-$ARCH"
+    # Check if using MinGW
+    if [ -n "$USE_MINGW" ]; then
+        PLATFORM="windows-mingw-$ARCH"
+    else
+        # Override with CMAKE_ARCH if provided (for Windows MSVC builds)
+        if [ -n "$CMAKE_ARCH" ]; then
+            if [ "$CMAKE_ARCH" == "x64" ]; then
+                ARCH="x86_64"
+            elif [ "$CMAKE_ARCH" == "arm64" ]; then
+                ARCH="aarch64"
+            fi
+        fi
+        PLATFORM="windows-$ARCH"
+    fi
 fi
 
 # Normalize architecture names
 PLATFORM=$(echo "$PLATFORM" | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
 
-echo "Building SPIRV-Cross for $PLATFORM..."
+echo "Building glslang for $PLATFORM..."
 
 # Detect number of CPU cores
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -42,14 +55,31 @@ fi
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-# Clone SPIRV-Cross
-if [ ! -d "spirv-cross" ]; then
-    echo "Cloning SPIRV-Cross..."
-    git clone --depth 1 --branch "$SPIRV_CROSS_VERSION" https://github.com/KhronosGroup/SPIRV-Cross.git spirv-cross
+# Clone glslang
+if [ ! -d "glslang" ]; then
+    echo "Cloning glslang..."
+    git clone --depth 1 --branch "$GLSLANG_VERSION" https://github.com/KhronosGroup/glslang.git
 fi
 
-# Build SPIRV-Cross
-cd spirv-cross
+# Clone SPIRV-Tools
+if [ ! -d "spirv-tools" ]; then
+    echo "Cloning SPIRV-Tools..."
+    git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Tools.git spirv-tools
+fi
+
+# Clone SPIRV-Headers (needed by SPIRV-Tools)
+if [ ! -d "spirv-tools/external/spirv-headers" ]; then
+    echo "Cloning SPIRV-Headers..."
+    git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git spirv-tools/external/spirv-headers
+fi
+
+# Create symlink for glslang to find SPIRV-Tools
+mkdir -p glslang/External
+rm -rf glslang/External/spirv-tools
+ln -sf ../../spirv-tools glslang/External/spirv-tools
+
+# Build glslang
+cd glslang
 mkdir -p build
 cd build
 
@@ -65,9 +95,16 @@ if [ -n "$MACOS_ARCH" ]; then
     CMAKE_OSX_ARCH_FLAG="-DCMAKE_OSX_ARCHITECTURES=$MACOS_ARCH"
 fi
 
-# Windows uses Ninja generator with MinGW
+# Windows MSVC uses -A for architecture
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && [ -z "$USE_MINGW" ]; then
+    if [ -n "$CMAKE_ARCH" ]; then
+        CMAKE_ARCH_FLAG="-A $CMAKE_ARCH"
+    fi
+fi
+
+# MinGW uses Ninja generator
 CMAKE_GENERATOR=""
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+if [ -n "$USE_MINGW" ]; then
     CMAKE_GENERATOR="-G Ninja"
     echo "Using MinGW with Ninja generator"
 fi
@@ -87,15 +124,17 @@ cmake .. \
     $CMAKE_C_COMPILER \
     $CMAKE_CXX_COMPILER \
     -DCMAKE_BUILD_TYPE=Release \
-    -DSPIRV_CROSS_SHARED=OFF \
-    -DSPIRV_CROSS_STATIC=ON \
-    -DSPIRV_CROSS_CLI=OFF \
-    -DSPIRV_CROSS_ENABLE_TESTS=OFF
+    -DBUILD_SHARED_LIBS=OFF \
+    -DENABLE_SPVREMAPPER=OFF \
+    -DENABLE_GLSLANG_BINARIES=OFF \
+    -DENABLE_CTEST=OFF \
+    -DENABLE_OPT=ON \
+    -DGLSLANG_TESTS=OFF
 
 cmake --build . --config Release -j$NCPU
 
 # Package output
-PACKAGE_DIR="$OUTPUT_DIR/spirv-cross-$PLATFORM"
+PACKAGE_DIR="$OUTPUT_DIR/glslang-$PLATFORM"
 mkdir -p "$PACKAGE_DIR"
 
 # Copy libraries
@@ -107,7 +146,7 @@ find . -name "*.dylib" -exec cp {} "$PACKAGE_DIR/" \;
 
 # Copy headers (preserving directory structure)
 echo "Packaging headers..."
-cd "$BUILD_DIR/spirv-cross"
+cd "$BUILD_DIR/glslang"
 find . -name "*.h" -o -name "*.hpp" | while read header; do
     mkdir -p "$PACKAGE_DIR/$(dirname "$header")"
     cp "$header" "$PACKAGE_DIR/$header"
@@ -115,7 +154,17 @@ done
 
 # Create archive
 cd "$OUTPUT_DIR"
-tar -czf "spirv-cross-${PLATFORM}.tar.gz" "spirv-cross-$PLATFORM"
-echo "Created: spirv-cross-${PLATFORM}.tar.gz"
+if [[ "$PLATFORM" == windows-mingw-* ]]; then
+    # MinGW builds use tar.gz (native Unix tools available)
+    tar -czf "glslang-${PLATFORM}.tar.gz" "glslang-$PLATFORM"
+    echo "Created: glslang-${PLATFORM}.tar.gz"
+elif [[ "$PLATFORM" == windows-* ]]; then
+    # Use PowerShell Compress-Archive on Windows MSVC (zip not available in Git Bash)
+    powershell -Command "Compress-Archive -Path 'glslang-$PLATFORM' -DestinationPath 'glslang-${PLATFORM}.zip' -Force"
+    echo "Created: glslang-${PLATFORM}.zip"
+else
+    tar -czf "glslang-${PLATFORM}.tar.gz" "glslang-$PLATFORM"
+    echo "Created: glslang-${PLATFORM}.tar.gz"
+fi
 
 echo "Build complete!"

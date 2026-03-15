@@ -35,22 +35,45 @@ jobs:
           - os: windows-latest
             runner: windows-latest
             platform: windows-amd64
-            arch: x64
+            mingw_arch: x86_64
           - os: windows-latest
             runner: windows-latest
             platform: windows-arm64
-            arch: arm64
+            mingw_arch: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build glslang
+      - name: Setup MinGW (Windows)
+        if: matrix.mingw_arch
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-${{ matrix.mingw_arch }}-gcc
+            mingw-w64-${{ matrix.mingw_arch }}-cmake
+            mingw-w64-${{ matrix.mingw_arch }}-ninja
+            mingw-w64-${{ matrix.mingw_arch }}-python
+            git
+            make
+
+      - name: Build glslang (Windows)
+        if: matrix.mingw_arch
+        shell: msys2 {0}
+        run: |
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
+          USE_MINGW=1 \
+          bash scripts/build-glslang.sh
+
+      - name: Build glslang (macOS/Linux)
+        if: ${{ !matrix.mingw_arch }}
         shell: bash
         run: |
           chmod +x scripts/build-glslang.sh
           BUILD_DIR="${{ runner.temp }}/build" \
           OUTPUT_DIR="${{ runner.temp }}/output" \
-          CMAKE_ARCH="${{ matrix.arch || '' }}" \
           MACOS_ARCH="${{ matrix.macos_arch || '' }}" \
           bash scripts/build-glslang.sh
 
@@ -83,22 +106,44 @@ jobs:
           - os: windows-latest
             runner: windows-latest
             platform: windows-amd64
-            arch: x64
+            mingw_arch: x86_64
           - os: windows-latest
             runner: windows-latest
             platform: windows-arm64
-            arch: arm64
+            mingw_arch: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build SPIRV-Cross
+      - name: Setup MinGW (Windows)
+        if: matrix.mingw_arch
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-${{ matrix.mingw_arch }}-gcc
+            mingw-w64-${{ matrix.mingw_arch }}-cmake
+            mingw-w64-${{ matrix.mingw_arch }}-ninja
+            git
+            make
+
+      - name: Build SPIRV-Cross (Windows)
+        if: matrix.mingw_arch
+        shell: msys2 {0}
+        run: |
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
+          USE_MINGW=1 \
+          bash scripts/build-spirv-cross.sh
+
+      - name: Build SPIRV-Cross (macOS/Linux)
+        if: ${{ !matrix.mingw_arch }}
         shell: bash
         run: |
           chmod +x scripts/build-spirv-cross.sh
           BUILD_DIR="${{ runner.temp }}/build" \
           OUTPUT_DIR="${{ runner.temp }}/output" \
-          CMAKE_ARCH="${{ matrix.arch || '' }}" \
           MACOS_ARCH="${{ matrix.macos_arch || '' }}" \
           bash scripts/build-spirv-cross.sh
 
@@ -125,6 +170,14 @@ jobs:
           - os: ubuntu-latest
             runner: ubuntu-24.04-arm
             platform: linux-arm64
+          - os: windows-latest
+            runner: windows-latest
+            platform: windows-amd64
+            mingw_arch: x86_64
+          - os: windows-latest
+            runner: windows-latest
+            platform: windows-arm64
+            mingw_arch: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -137,7 +190,31 @@ jobs:
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
 
-      - name: Build DXC
+      - name: Setup MinGW (Windows)
+        if: matrix.mingw_arch
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-${{ matrix.mingw_arch }}-gcc
+            mingw-w64-${{ matrix.mingw_arch }}-cmake
+            mingw-w64-${{ matrix.mingw_arch }}-ninja
+            mingw-w64-${{ matrix.mingw_arch }}-python
+            git
+            make
+
+      - name: Build DXC (Windows)
+        if: matrix.mingw_arch
+        shell: msys2 {0}
+        run: |
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
+          USE_MINGW=1 \
+          bash scripts/build-dxc.sh
+
+      - name: Build DXC (macOS/Linux)
+        if: ${{ !matrix.mingw_arch }}
         shell: bash
         run: |
           chmod +x scripts/build-dxc.sh
@@ -186,78 +263,9 @@ jobs:
           name: dxc-${{ matrix.platform }}
           path: output/dxc-${{ matrix.platform }}.tar.gz
 
-  download-dxc-windows:
-    name: Download DXC (Windows)
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - platform: windows-amd64
-            arch: x64
-          - platform: windows-arm64
-            arch: arm64
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Microsoft DXC Release
-        run: |
-          # Get latest DXC release from Microsoft
-          LATEST_RELEASE=$(curl -s https://api.github.com/repos/microsoft/DirectXShaderCompiler/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
-          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/microsoft/DirectXShaderCompiler/releases/latest | grep '"browser_download_url".*dxc.*\.zip"' | grep -v pdb | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "Downloading DXC $LATEST_RELEASE for ${{ matrix.platform }}"
-          echo "Download URL: $DOWNLOAD_URL"
-
-          # Determine the correct binary suffix
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            BINARY_SUFFIX="arm64"
-          else
-            BINARY_SUFFIX="x64"
-          fi
-
-          # Download the Windows release
-          curl -L -o dxc.zip "$DOWNLOAD_URL"
-
-          # Extract and repackage for our platform
-          mkdir -p output/dxc-${{ matrix.platform }}
-          unzip -q dxc.zip -d extracted
-
-          # Copy binaries and libraries
-          mkdir -p output/dxc-${{ matrix.platform }}/bin
-          mkdir -p output/dxc-${{ matrix.platform }}/lib
-          mkdir -p output/dxc-${{ matrix.platform }}/include
-
-          # Copy appropriate architecture binaries
-          if [ -d "extracted/bin/${BINARY_SUFFIX}" ]; then
-            cp -r extracted/bin/${BINARY_SUFFIX}/* output/dxc-${{ matrix.platform }}/bin/
-          else
-            # Fallback to x64 if arm64 not available
-            cp -r extracted/bin/x64/* output/dxc-${{ matrix.platform }}/bin/
-          fi
-
-          # Copy libraries
-          if [ -d "extracted/lib/${BINARY_SUFFIX}" ]; then
-            cp -r extracted/lib/${BINARY_SUFFIX}/* output/dxc-${{ matrix.platform }}/lib/
-          else
-            cp -r extracted/lib/x64/* output/dxc-${{ matrix.platform }}/lib/
-          fi
-
-          # Copy headers
-          cp -r extracted/inc/* output/dxc-${{ matrix.platform }}/include/
-
-          # Create archive
-          cd output
-          zip -r dxc-${{ matrix.platform }}.zip dxc-${{ matrix.platform }}
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dxc-${{ matrix.platform }}
-          path: output/dxc-${{ matrix.platform }}.zip
-
   create-release:
     name: Create Release
-    needs: [build-glslang, build-spirv-cross, build-dxc, download-dxc-linux, download-dxc-windows]
+    needs: [build-glslang, build-spirv-cross, build-dxc, download-dxc-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
