@@ -1,15 +1,15 @@
-# Vendor - Go Module
+# External - Go Module
 
 Go package for automatically downloading and managing shader compilation toolchain binaries.
 
 ## Usage
 
 ```go
-import "github.com/enigmaneering/vendor"
+import external "github.com/enigmaneering/external/go/lib"
 
 func main() {
-    // Automatically download and extract vendor libraries
-    if err := vendor.EnsureLibraries(); err != nil {
+    // Automatically download and extract external libraries
+    if err := external.EnsureLibraries(); err != nil {
         log.Fatal(err)
     }
 
@@ -22,10 +22,10 @@ func main() {
 
 ## Configuration
 
-Set the `VENDOR_EXTERNAL_DIR` environment variable to change the installation directory:
+Set the `EXTERNAL_DIR` environment variable to change the installation directory:
 
 ```bash
-export VENDOR_EXTERNAL_DIR=/path/to/custom/external
+export EXTERNAL_DIR=/path/to/custom/external
 ```
 
 ## Version Selection
@@ -33,7 +33,7 @@ export VENDOR_EXTERNAL_DIR=/path/to/custom/external
 Use a specific release version:
 
 ```go
-if err := vendor.EnsureLibrariesVersion("v0.0.42"); err != nil {
+if err := external.EnsureLibrariesVersion("v0.0.42"); err != nil {
     log.Fatal(err)
 }
 ```

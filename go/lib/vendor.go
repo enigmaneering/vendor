@@ -1,4 +1,4 @@
-package vendor
+package external
 
 import (
 	"archive/tar"
@@ -14,25 +14,25 @@ import (
 )
 
 const (
-	githubRepo    = "enigmaneering/vendor"
+	githubRepo    = "enigmaneering/external"
 	defaultVersion = "v0.0.42"
 )
 
-// GetExternalDir returns the path where vendor libraries should be installed
+// GetExternalDir returns the path where external libraries should be installed
 // Defaults to ./external relative to the caller's working directory
 func GetExternalDir() string {
-	if dir := os.Getenv("VENDOR_EXTERNAL_DIR"); dir != "" {
+	if dir := os.Getenv("EXTERNAL_DIR"); dir != "" {
 		return dir
 	}
 	return "external"
 }
 
-// EnsureLibraries downloads and extracts all vendor libraries if not present
+// EnsureLibraries downloads and extracts all external libraries if not present
 func EnsureLibraries() error {
 	return EnsureLibrariesVersion(defaultVersion)
 }
 
-// EnsureLibrariesVersion downloads and extracts vendor libraries for a specific version
+// EnsureLibrariesVersion downloads and extracts external libraries for a specific version
 func EnsureLibrariesVersion(version string) error {
 	externalDir := GetExternalDir()
 
@@ -62,7 +62,7 @@ func EnsureLibrariesVersion(version string) error {
 	return nil
 }
 
-// isInstalled checks if vendor libraries are already present
+// isInstalled checks if external libraries are already present
 func isInstalled(externalDir string) bool {
 	// Check for key binaries/libraries
 	markers := []string{
@@ -214,7 +214,7 @@ func extractTarGz(archivePath, destDir string) error {
 	return nil
 }
 
-// downloadLicenseFiles downloads LICENSE and README from the vendor repo
+// downloadLicenseFiles downloads LICENSE and README from the external repo
 func downloadLicenseFiles(version, externalDir string) error {
 	files := []string{"LICENSES.md", "README.md"}
 

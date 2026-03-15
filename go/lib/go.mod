@@ -1,3 +1,3 @@
-module github.com/enigmaneering/vendor/go/lib
+module github.com/enigmaneering/external/go/lib
 
 go 1.23
