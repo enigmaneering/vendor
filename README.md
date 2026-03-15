@@ -16,6 +16,7 @@ Pre-built shader compilation toolchain binaries for cross-platform development.
 - macOS ARM64 (Apple Silicon)
 - macOS x86_64 (Intel)
 - Linux x86_64
+- Linux ARM64
 - Windows x86_64
 - Windows ARM64
 
@@ -48,7 +49,7 @@ tar -xzf glslang.tar.gz -C external/
 
 ## License
 
-These are prebuilt binaries of open-source projects. See [LICENSES.md](LICENSES.md) for full license text.
+These are prebuilt binaries of open-source projects. See LICENSES directory for full license text.
 
 Summary:
 - glslang (+ SPIRV-Tools/SPIRV-Headers): BSD-3-Clause / Apache-2.0
