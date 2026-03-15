@@ -80,6 +80,13 @@ if [ -f tools/clang/CMakeLists.txt ]; then
     sed -i.bak 's/cmake_minimum_required(VERSION [0-9.]*)/cmake_minimum_required(VERSION 3.5)/' tools/clang/CMakeLists.txt
 fi
 
+# Copy ATL compatibility header for MinGW builds (before entering build directory)
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+    echo "Setting up ATL compatibility header for MinGW..."
+    mkdir -p include/atl_compat
+    cp "$SCRIPT_DIR/../patches/atlbase_compat.h" include/atl_compat/atlbase.h
+fi
+
 # Build DXC
 mkdir -p build
 cd build
@@ -149,12 +156,6 @@ fi
 
 echo "Configuring DXC..."
 
-# Copy ATL compatibility header for MinGW builds
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    mkdir -p ../include/atl_compat
-    cp "$SCRIPT_DIR/../patches/atlbase_compat.h" ../include/atl_compat/atlbase.h
-fi
-
 # For ARM64 cross-compilation, we need to prevent CMake from adding cf-protection flags
 # Skip the cache file entirely for ARM64 to avoid x86-specific flags
 if [ -n "$CROSS_COMPILE_TARGET" ] && [ "$CROSS_COMPILE_TARGET" = "aarch64" ]; then
@@ -178,8 +179,8 @@ if [ -n "$CROSS_COMPILE_TARGET" ] && [ "$CROSS_COMPILE_TARGET" = "aarch64" ]; th
         $CMAKE_CXX_COMPILER \
         $CMAKE_LINKER \
         $CMAKE_SHARED_LINKER_FLAGS \
-        "-DCMAKE_C_FLAGS=-O2 -DNDEBUG -I../include/atl_compat -include windows.h -include strsafe.h -Wno-unused-command-line-argument -Qunused-arguments" \
-        "-DCMAKE_CXX_FLAGS=-O2 -DNDEBUG -std=gnu++17 -I../include/atl_compat -include windows.h -include strsafe.h -include atlbase.h -Wno-unused-command-line-argument -Wno-invalid-specialization -Wno-ignored-attributes -Qunused-arguments" \
+        "-DCMAKE_C_FLAGS=-O2 -DNDEBUG -I../../include/atl_compat -include windows.h -include strsafe.h -Wno-unused-command-line-argument -Qunused-arguments" \
+        "-DCMAKE_CXX_FLAGS=-O2 -DNDEBUG -std=gnu++17 -I../../include/atl_compat -include windows.h -include strsafe.h -include atlbase.h -Wno-unused-command-line-argument -Wno-invalid-specialization -Wno-ignored-attributes -Qunused-arguments" \
         -DCMAKE_C_FLAGS_RELEASE="" \
         -DCMAKE_CXX_FLAGS_RELEASE="" \
         -DLLVM_ENABLE_EH=ON \
