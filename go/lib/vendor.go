@@ -309,9 +309,16 @@ func extractZip(archivePath, destDir, library, platform string) error {
 
 	platformPrefix := fmt.Sprintf("%s-%s", library, platform)
 
+	// Ensure the library root directory exists first
+	libRoot := filepath.Join(destDir, library)
+	if err := os.MkdirAll(libRoot, 0755); err != nil {
+		return fmt.Errorf("failed to create library root directory %s: %w", libRoot, err)
+	}
+
 	for _, f := range r.File {
 		// Strip platform suffix from path
-		name := f.Name
+		// Normalize path separators (ZIP files may use either / or \)
+		name := filepath.ToSlash(f.Name)
 		if strings.HasPrefix(name, platformPrefix+"/") {
 			name = library + name[len(platformPrefix):]
 		} else if name == platformPrefix {
@@ -320,8 +327,12 @@ func extractZip(archivePath, destDir, library, platform string) error {
 
 		target := filepath.Join(destDir, name)
 
-		if f.FileInfo().IsDir() {
-			os.MkdirAll(target, 0755)
+		// Check if entry is a directory (either via FileInfo or trailing separator)
+		isDir := f.FileInfo().IsDir() || strings.HasSuffix(name, "/")
+		if isDir {
+			if err := os.MkdirAll(target, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", target, err)
+			}
 			continue
 		}
 
