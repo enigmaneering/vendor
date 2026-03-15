@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,9 +15,13 @@ import (
 )
 
 const (
-	githubRepo    = "enigmaneering/external"
-	defaultVersion = "v0.0.42"
+	githubRepo = "enigmaneering/external"
 )
+
+// GitHubRelease represents a GitHub release
+type GitHubRelease struct {
+	TagName string `json:"tag_name"`
+}
 
 // GetExternalDir returns the path where external libraries should be installed
 // Defaults to ./external relative to the caller's working directory
@@ -27,9 +32,41 @@ func GetExternalDir() string {
 	return "external"
 }
 
+// getLatestVersion queries GitHub for the latest release tag
+func getLatestVersion() (string, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", githubRepo)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to query GitHub API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned status: %s", resp.Status)
+	}
+
+	var release GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", fmt.Errorf("failed to parse GitHub response: %w", err)
+	}
+
+	if release.TagName == "" {
+		return "", fmt.Errorf("no tag name in GitHub response")
+	}
+
+	return release.TagName, nil
+}
+
 // EnsureLibraries downloads and extracts all external libraries if not present
+// Automatically uses the latest release version
 func EnsureLibraries() error {
-	return EnsureLibrariesVersion(defaultVersion)
+	version, err := getLatestVersion()
+	if err != nil {
+		return fmt.Errorf("failed to determine latest version: %w", err)
+	}
+	fmt.Printf("Using latest release: %s\n", version)
+	return EnsureLibrariesVersion(version)
 }
 
 // EnsureLibrariesVersion downloads and extracts external libraries for a specific version

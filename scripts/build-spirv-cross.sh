@@ -7,7 +7,18 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/../build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/../output}"
-SPIRV_CROSS_VERSION="${SPIRV_CROSS_VERSION:-main}"
+
+# Query GitHub for latest release if not specified
+if [ -z "$SPIRV_CROSS_VERSION" ]; then
+    echo "Querying GitHub for latest SPIRV-Cross release..."
+    SPIRV_CROSS_VERSION=$(curl -s https://api.github.com/repos/KhronosGroup/SPIRV-Cross/releases/latest | grep '"tag_name"' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+    if [ -z "$SPIRV_CROSS_VERSION" ]; then
+        echo "Error: Could not determine latest SPIRV-Cross version, falling back to main"
+        SPIRV_CROSS_VERSION="main"
+    else
+        echo "Latest release: $SPIRV_CROSS_VERSION"
+    fi
+fi
 
 # Detect platform
 if [[ "$OSTYPE" == "darwin"* ]]; then

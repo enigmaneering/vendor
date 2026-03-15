@@ -6,7 +6,18 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/../output}"
-DXC_VERSION="${DXC_VERSION:-1.8.2407.31}"  # NuGet version format (includes patch number)
+PACKAGE_NAME="Microsoft.Direct3D.DXC"
+
+# Query NuGet for latest version if not specified
+if [ -z "$DXC_VERSION" ]; then
+    echo "Querying NuGet for latest version of $PACKAGE_NAME..."
+    DXC_VERSION=$(curl -s "https://api.nuget.org/v3-flatcontainer/${PACKAGE_NAME}/index.json" | grep -oE '"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' | tail -1 | tr -d '"')
+    if [ -z "$DXC_VERSION" ]; then
+        echo "Error: Could not determine latest DXC version from NuGet"
+        exit 1
+    fi
+    echo "Latest version: $DXC_VERSION"
+fi
 
 # Determine architecture
 if [ -n "$CROSS_COMPILE_TARGET" ]; then
@@ -37,7 +48,6 @@ mkdir -p "$TEMP_DIR"
 cd "$TEMP_DIR"
 
 # Download NuGet package
-PACKAGE_NAME="Microsoft.Direct3D.DXC"
 NUGET_URL="https://www.nuget.org/api/v2/package/${PACKAGE_NAME}/${DXC_VERSION}"
 PACKAGE_FILE="${PACKAGE_NAME}.${DXC_VERSION}.nupkg"
 
