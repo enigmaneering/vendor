@@ -81,10 +81,15 @@ if [ -f tools/clang/CMakeLists.txt ]; then
 fi
 
 # Copy ATL compatibility header for MinGW builds (before entering build directory)
+ATL_COMPAT_INCLUDE=""
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
     echo "Setting up ATL compatibility header for MinGW..."
     mkdir -p include/atl_compat
     cp "$SCRIPT_DIR/../patches/atlbase_compat.h" include/atl_compat/atlbase.h
+    # Get absolute path for CMake (works in both Unix and Windows paths)
+    ATL_COMPAT_DIR="$(cd include/atl_compat && pwd)"
+    # Convert to Windows path with forward slashes for CMake
+    ATL_COMPAT_INCLUDE="-I$(cygpath -m "$ATL_COMPAT_DIR" 2>/dev/null || echo "$ATL_COMPAT_DIR")"
 fi
 
 # Build DXC
@@ -179,8 +184,8 @@ if [ -n "$CROSS_COMPILE_TARGET" ] && [ "$CROSS_COMPILE_TARGET" = "aarch64" ]; th
         $CMAKE_CXX_COMPILER \
         $CMAKE_LINKER \
         $CMAKE_SHARED_LINKER_FLAGS \
-        "-DCMAKE_C_FLAGS=-O2 -DNDEBUG -I../../include/atl_compat -include windows.h -include strsafe.h -Wno-unused-command-line-argument -Qunused-arguments" \
-        "-DCMAKE_CXX_FLAGS=-O2 -DNDEBUG -std=gnu++17 -I../../include/atl_compat -include windows.h -include strsafe.h -include atlbase.h -Wno-unused-command-line-argument -Wno-invalid-specialization -Wno-ignored-attributes -Qunused-arguments" \
+        "-DCMAKE_C_FLAGS=-O2 -DNDEBUG ${ATL_COMPAT_INCLUDE} -include windows.h -include strsafe.h -Wno-unused-command-line-argument -Qunused-arguments" \
+        "-DCMAKE_CXX_FLAGS=-O2 -DNDEBUG -std=gnu++17 ${ATL_COMPAT_INCLUDE} -include windows.h -include strsafe.h -include atlbase.h -Wno-unused-command-line-argument -Wno-invalid-specialization -Wno-ignored-attributes -Qunused-arguments" \
         -DCMAKE_C_FLAGS_RELEASE="" \
         -DCMAKE_CXX_FLAGS_RELEASE="" \
         -DLLVM_ENABLE_EH=ON \
