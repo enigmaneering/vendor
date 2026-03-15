@@ -1,0 +1,193 @@
+name: Check for New Versions
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: write
+
+jobs:
+  check-versions:
+    name: Check for Updates
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Query for latest versions
+        id: versions
+        run: |
+          # Get latest DXC version from NuGet
+          echo "Checking DXC from NuGet..."
+          DXC_VERSION=$(curl -s "https://api.nuget.org/v3-flatcontainer/microsoft.direct3d.dxc/index.json" | grep -oE '"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' | tail -1 | tr -d '"')
+          echo "dxc_version=$DXC_VERSION" >> $GITHUB_OUTPUT
+          echo "DXC: $DXC_VERSION"
+
+          # Get latest glslang version
+          echo "Checking glslang from GitHub..."
+          GLSLANG_VERSION=$(curl -s https://api.github.com/repos/KhronosGroup/glslang/releases/latest | grep '"tag_name"' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+          echo "glslang_version=$GLSLANG_VERSION" >> $GITHUB_OUTPUT
+          echo "glslang: $GLSLANG_VERSION"
+
+          # Get latest SPIRV-Cross Vulkan SDK tag
+          echo "Checking SPIRV-Cross from GitHub..."
+          SPIRV_CROSS_VERSION=$(curl -s https://api.github.com/repos/KhronosGroup/SPIRV-Cross/tags | grep '"name"' | grep 'vulkan-sdk-' | head -1 | sed -E 's/.*"name": "([^"]+)".*/\1/')
+          echo "spirv_cross_version=$SPIRV_CROSS_VERSION" >> $GITHUB_OUTPUT
+          echo "SPIRV-Cross: $SPIRV_CROSS_VERSION"
+
+      - name: Check current versions file
+        id: check
+        run: |
+          # Create versions file if it doesn't exist
+          if [ ! -f CURRENT_VERSIONS.txt ]; then
+            echo "No CURRENT_VERSIONS.txt found, creating initial version"
+            echo "needs_release=true" >> $GITHUB_OUTPUT
+          else
+            # Compare with current versions
+            CURRENT_DXC=$(grep "DXC=" CURRENT_VERSIONS.txt | cut -d'=' -f2 || echo "")
+            CURRENT_GLSLANG=$(grep "GLSLANG=" CURRENT_VERSIONS.txt | cut -d'=' -f2 || echo "")
+            CURRENT_SPIRV_CROSS=$(grep "SPIRV_CROSS=" CURRENT_VERSIONS.txt | cut -d'=' -f2 || echo "")
+
+            echo "Current versions:"
+            echo "  DXC: $CURRENT_DXC -> ${{ steps.versions.outputs.dxc_version }}"
+            echo "  glslang: $CURRENT_GLSLANG -> ${{ steps.versions.outputs.glslang_version }}"
+            echo "  SPIRV-Cross: $CURRENT_SPIRV_CROSS -> ${{ steps.versions.outputs.spirv_cross_version }}"
+
+            if [ "$CURRENT_DXC" != "${{ steps.versions.outputs.dxc_version }}" ] || \
+               [ "$CURRENT_GLSLANG" != "${{ steps.versions.outputs.glslang_version }}" ] || \
+               [ "$CURRENT_SPIRV_CROSS" != "${{ steps.versions.outputs.spirv_cross_version }}" ]; then
+              echo "New versions detected!"
+              echo "needs_release=true" >> $GITHUB_OUTPUT
+            else
+              echo "All versions up to date"
+              echo "needs_release=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Update versions file
+        if: steps.check.outputs.needs_release == 'true'
+        run: |
+          cat > CURRENT_VERSIONS.txt <<EOF
+          DXC=${{ steps.versions.outputs.dxc_version }}
+          GLSLANG=${{ steps.versions.outputs.glslang_version }}
+          SPIRV_CROSS=${{ steps.versions.outputs.spirv_cross_version }}
+          UPDATED=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          EOF
+
+      - name: Generate release notes
+        if: steps.check.outputs.needs_release == 'true'
+        id: release_notes
+        run: |
+          # Get previous versions for comparison
+          PREV_DXC=$(grep "DXC=" CURRENT_VERSIONS.txt 2>/dev/null | cut -d'=' -f2 || echo "none")
+          PREV_GLSLANG=$(grep "GLSLANG=" CURRENT_VERSIONS.txt 2>/dev/null | cut -d'=' -f2 || echo "none")
+          PREV_SPIRV_CROSS=$(grep "SPIRV_CROSS=" CURRENT_VERSIONS.txt 2>/dev/null | cut -d'=' -f2 || echo "none")
+
+          # Create release notes
+          cat > release_notes.md <<EOF
+          Automated release with updated shader compiler versions.
+
+          ## Version Updates
+
+          - **DXC**: $PREV_DXC → ${{ steps.versions.outputs.dxc_version }}
+          - **glslang**: $PREV_GLSLANG → ${{ steps.versions.outputs.glslang_version }}
+          - **SPIRV-Cross**: $PREV_SPIRV_CROSS → ${{ steps.versions.outputs.spirv_cross_version }}
+
+          ## Sources
+
+          - DXC (Windows): [NuGet Package](https://www.nuget.org/packages/Microsoft.Direct3D.DXC/${{ steps.versions.outputs.dxc_version }})
+          - DXC (Linux): [GitHub Release](https://github.com/microsoft/DirectXShaderCompiler/releases/latest)
+          - glslang: [GitHub Release](https://github.com/KhronosGroup/glslang/releases/tag/${{ steps.versions.outputs.glslang_version }})
+          - SPIRV-Cross: [GitHub Tag](https://github.com/KhronosGroup/SPIRV-Cross/tree/${{ steps.versions.outputs.spirv_cross_version }})
+
+          ## Platforms
+
+          All binaries built for:
+          - darwin-amd64
+          - darwin-arm64
+          - linux-amd64
+          - linux-arm64
+          - windows-amd64
+          - windows-arm64
+
+          ---
+          🤖 This release was automatically generated by the version check workflow.
+          EOF
+
+      - name: Commit version changes
+        if: steps.check.outputs.needs_release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CURRENT_VERSIONS.txt
+          git commit -m "Update dependency versions
+
+          - DXC: ${{ steps.versions.outputs.dxc_version }}
+          - glslang: ${{ steps.versions.outputs.glslang_version }}
+          - SPIRV-Cross: ${{ steps.versions.outputs.spirv_cross_version }}"
+          git push
+
+      - name: Calculate next version
+        if: steps.check.outputs.needs_release == 'true'
+        id: next_version
+        run: |
+          # Get latest release tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          # Extract version numbers (expecting vX.Y.Z format)
+          if [[ $LATEST_TAG =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+
+            # Increment patch version
+            NEXT_PATCH=$((PATCH + 1))
+            NEXT_VERSION="v${MAJOR}.${MINOR}.${NEXT_PATCH}"
+          else
+            # Fallback if tag format is unexpected
+            NEXT_VERSION="v0.0.43"
+          fi
+
+          echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+          echo "Next version: $NEXT_VERSION"
+
+      - name: Create release tag
+        if: steps.check.outputs.needs_release == 'true'
+        run: |
+          git tag ${{ steps.next_version.outputs.next_version }}
+          git push origin ${{ steps.next_version.outputs.next_version }}
+
+      - name: Trigger release workflow
+        if: steps.check.outputs.needs_release == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'build-release.yml',
+              ref: '${{ steps.next_version.outputs.next_version }}'
+            });
+
+      - name: Summary
+        if: steps.check.outputs.needs_release == 'true'
+        run: |
+          echo "## 🚀 New Release Triggered" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version: **${{ steps.next_version.outputs.next_version }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Updated Versions" >> $GITHUB_STEP_SUMMARY
+          echo "- DXC: ${{ steps.versions.outputs.dxc_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- glslang: ${{ steps.versions.outputs.glslang_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- SPIRV-Cross: ${{ steps.versions.outputs.spirv_cross_version }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: No update needed
+        if: steps.check.outputs.needs_release == 'false'
+        run: |
+          echo "## ✅ All Dependencies Up to Date" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No new versions detected." >> $GITHUB_STEP_SUMMARY

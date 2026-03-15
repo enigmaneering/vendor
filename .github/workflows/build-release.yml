@@ -5,11 +5,6 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version (e.g., v1.0.0)'
-        required: true
-        default: 'v1.0.0'
 
 jobs:
   build-glslang:
@@ -377,8 +372,34 @@ jobs:
         id: version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            # Manual trigger - calculate next version from latest tag
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            echo "Latest tag: $LATEST_TAG"
+
+            # Extract version numbers (expecting vX.Y.Z format)
+            if [[ $LATEST_TAG =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+
+              # Increment patch version
+              NEXT_PATCH=$((PATCH + 1))
+              VERSION="v${MAJOR}.${MINOR}.${NEXT_PATCH}"
+            else
+              # Fallback if tag format is unexpected
+              VERSION="v0.0.43"
+            fi
+
+            echo "Next version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+            # Create and push the tag
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag $VERSION
+            git push origin $VERSION
           else
+            # Tag push - use the tag name
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
