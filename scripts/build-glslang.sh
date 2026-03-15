@@ -106,13 +106,16 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; t
         # Resolve to absolute path and convert to Windows path for CMake
         if [ -d "$LLVM_MINGW_DIR" ]; then
             LLVM_MINGW_ABS="$(cd "$LLVM_MINGW_DIR" && pwd)"
-            LLVM_MINGW_ROOT="$(cygpath -w "$LLVM_MINGW_ABS" 2>/dev/null || echo "$LLVM_MINGW_ABS")"
+            # For CMake compiler path, use Windows path
+            LLVM_MINGW_ROOT_WIN="$(cygpath -w "$LLVM_MINGW_ABS" 2>/dev/null || echo "$LLVM_MINGW_ABS")"
+            # For sysroot, keep Unix path (Clang handles this better in MSYS2)
+            LLVM_MINGW_ROOT="$LLVM_MINGW_ABS"
         else
             echo "ERROR: llvm-mingw directory not found at $LLVM_MINGW_DIR"
             exit 1
         fi
-        CMAKE_C_COMPILER="-DCMAKE_C_COMPILER=${LLVM_MINGW_ROOT}/bin/clang.exe"
-        CMAKE_CXX_COMPILER="-DCMAKE_CXX_COMPILER=${LLVM_MINGW_ROOT}/bin/clang++.exe"
+        CMAKE_C_COMPILER="-DCMAKE_C_COMPILER=${LLVM_MINGW_ROOT_WIN}/bin/clang.exe"
+        CMAKE_CXX_COMPILER="-DCMAKE_CXX_COMPILER=${LLVM_MINGW_ROOT_WIN}/bin/clang++.exe"
         CMAKE_SYSTEM_PROCESSOR="-DCMAKE_SYSTEM_PROCESSOR=aarch64"
         # Set flags as environment variables to avoid shell quoting issues
         # Include sysroot for Windows headers and libraries

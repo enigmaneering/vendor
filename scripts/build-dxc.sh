@@ -165,7 +165,9 @@ cmake .. \
     -DHLSL_ENABLE_ANALYZE=OFF \
     -DHLSL_BUILD_DXILCONV=OFF \
     -DHLSL_INCLUDE_TESTS=OFF \
-    -DCLANG_INCLUDE_TESTS=OFF
+    -DCLANG_INCLUDE_TESTS=OFF \
+    -DHAVE_CXX_ATOMICS_WITHOUT_LIB=TRUE \
+    -DHAVE_CXX_ATOMICS64_WITHOUT_LIB=TRUE
 
 echo "Building DXC (this may take 10-20 minutes)..."
 # Building dxc automatically builds dxcompiler as a dependency
