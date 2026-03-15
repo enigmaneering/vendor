@@ -81,9 +81,9 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; t
         CMAKE_LINKER="-DCMAKE_LINKER=/mingw64/bin/ld.lld.exe"
         CMAKE_SYSTEM_PROCESSOR="-DCMAKE_SYSTEM_PROCESSOR=aarch64"
         # Set flags as environment variables to avoid shell quoting issues
-        export CFLAGS="--target=aarch64-w64-mingw32 --sysroot=/mingw64/aarch64-w64-mingw32"
-        export CXXFLAGS="--target=aarch64-w64-mingw32 --sysroot=/mingw64/aarch64-w64-mingw32"
-        export LDFLAGS="-fuse-ld=lld -L/mingw64/aarch64-w64-mingw32/lib"
+        export CFLAGS="--target=aarch64-w64-mingw32"
+        export CXXFLAGS="--target=aarch64-w64-mingw32"
+        export LDFLAGS="-fuse-ld=lld --sysroot=D:/a/_temp/msys64/mingw64/aarch64-w64-mingw32"
     fi
 fi
 
