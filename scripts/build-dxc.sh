@@ -148,6 +148,16 @@ if [[ "$OSTYPE" == "linux-gnu"* ]] && [ -n "$CMAKE_ARCH" ] && [ "$CMAKE_ARCH" = 
 fi
 
 echo "Configuring DXC..."
+
+# For ARM64 cross-compilation, override CMAKE_C/CXX_FLAGS to remove cf-protection
+if [ -n "$CROSS_COMPILE_TARGET" ] && [ "$CROSS_COMPILE_TARGET" = "aarch64" ]; then
+    CMAKE_C_FLAGS_OVERRIDE="-DCMAKE_C_FLAGS_RELEASE=-O2 -DNDEBUG"
+    CMAKE_CXX_FLAGS_OVERRIDE="-DCMAKE_CXX_FLAGS_RELEASE=-O2 -DNDEBUG -std=gnu++17"
+else
+    CMAKE_C_FLAGS_OVERRIDE=""
+    CMAKE_CXX_FLAGS_OVERRIDE=""
+fi
+
 # Use cache file first, then override with our flags
 # Note: DXC builds libdxcompiler as a shared library by default
 # We keep BUILD_SHARED_LIBS=OFF but also build the dylib target
@@ -161,6 +171,8 @@ cmake .. \
     $CMAKE_CXX_COMPILER \
     $CMAKE_LINKER \
     $CMAKE_SHARED_LINKER_FLAGS \
+    $CMAKE_C_FLAGS_OVERRIDE \
+    $CMAKE_CXX_FLAGS_OVERRIDE \
     -DCMAKE_BUILD_TYPE=Release \
     -DENABLE_SPIRV_CODEGEN=ON \
     -DSPIRV_BUILD_TESTS=OFF \
