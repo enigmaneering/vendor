@@ -744,7 +744,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.determine-version.outputs.gpu_version }}
-          name: go/fetch ${{ needs.determine-version.outputs.gpu_version }}
+          name: Fetch CLI & Go Module ${{ needs.determine-version.outputs.gpu_version }}
           draft: false
           prerelease: false
           files: |
