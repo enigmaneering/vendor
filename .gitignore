@@ -3,10 +3,6 @@ output/
 *.tar.gz
 *.zip
 
-# Exception: Include embedded binaries in go/lib
-!go/lib/binaries/*.tar.gz
-!go/lib/binaries/*.zip
-
 # Version freeze file - prevents automatic updates
 # Users can create this to lock their external library versions
 freeze

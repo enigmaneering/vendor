@@ -7,9 +7,8 @@ Pre-built shader compilation toolchain binaries for cross-platform development w
 - **glslang** - GLSL to SPIRV compiler with optimizer support
   - Includes SPIRV-Tools (optimizer and validator)
   - Includes SPIRV-Headers (required headers)
-- **SPIRV-Cross** - SPIRV to GLSL/HLSL/MSL/WGSL transpiler
+- **SPIRV-Cross** - SPIRV to GLSL/HLSL/MSL transpiler
 - **DXC** - DirectX Shader Compiler (HLSL to SPIRV/DXIL)
-- **Naga** - WebGPU shader compiler (WGSL to SPIRV)
 
 ## Supported Platforms
 
@@ -43,13 +42,13 @@ This repository features a fully automated release pipeline:
 
 ### Automated (Recommended)
 
-Use the Go library with embedded binaries:
+Use the Go library for automatic download and version management:
 
 ```go
 import external "github.com/enigmaneering/external/go/lib"
 
 func main() {
-    // Extracts embedded binaries for your platform
+    // Automatically downloads latest release
     if err := external.EnsureLibraries(); err != nil {
         log.Fatal(err)
     }
@@ -59,12 +58,11 @@ func main() {
 ```
 
 **Features:**
-- **Zero network requests** - binaries embedded in Go module
-- **Single `go get`** - no separate download step
-- **Automatic platform detection** (darwin/linux/windows × amd64/arm64)
-- **Version tracking** and automatic extraction
-- **Opt-out freeze mechanism** (create `external/FREEZE` file)
-- **~30MB per platform** (only downloads binaries for your OS/arch)
+- Automatically downloads latest release
+- Auto-upgrades when new versions available
+- Platform detection (darwin/linux/windows × amd64/arm64)
+- Version tracking and management
+- Opt-out freeze mechanism (create `external/freeze` file)
 
 See [go/lib/README.md](go/lib/README.md) for details.
 
@@ -76,8 +74,8 @@ Download prebuilt binaries from the latest release:
 VERSION="v0.0.42"  # or use 'latest'
 PLATFORM="darwin-arm64"  # darwin-amd64, linux-amd64, linux-arm64, windows-amd64, windows-arm64
 
-# Download all four tools
-for tool in glslang spirv-cross dxc naga; do
+# Download all three tools
+for tool in glslang spirv-cross dxc; do
   curl -L -o "${tool}.tar.gz" \
     "https://github.com/enigmaneering/external/releases/download/${VERSION}/${tool}-${PLATFORM}.tar.gz"
   tar -xzf "${tool}.tar.gz" -C external/

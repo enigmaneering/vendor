@@ -1,14 +1,15 @@
 # External - Go Module
 
-Go package for shader compilation toolchain binaries with embedded support.
+Go package for automatically downloading and managing shader compilation toolchain binaries.
 
 ## Features
 
-- **Embedded binaries** - no network requests, no GitHub API calls
-- **Automatic extraction** - binaries extracted to `./external/` on first use
-- **Platform detection** - automatically selects correct binaries for your OS/architecture
-- **Version tracking** - prevents redundant extractions
-- **Freeze mechanism** - create `external/FREEZE` file to disable automatic extraction
+- Automatic download of prebuilt binaries from GitHub Releases
+- Automatic version updates when new releases are available
+- Platform detection (darwin, linux, windows × amd64, arm64)
+- Version management and tracking
+- Opt-out mechanism for freezing versions
+- Simple API for ensuring libraries are present
 
 ## Usage
 
@@ -16,55 +17,60 @@ Go package for shader compilation toolchain binaries with embedded support.
 import external "github.com/enigmaneering/external/go/lib"
 
 func main() {
-    // Extract embedded binaries if not already present
+    // Automatically download and extract external libraries
+    // Downloads latest release or upgrades if newer version available
     if err := external.EnsureLibraries(); err != nil {
         log.Fatal(err)
     }
 
-    // Libraries now available in ./external/
+    // Libraries are now available in ./external/
     // - external/glslang/
     // - external/spirv-cross/
     // - external/dxc/
-    // - external/naga/
 }
 ```
 
-## How It Works
+## Automatic Updates
 
-1. **Embedded** - All platform binaries (~292MB total) embedded using `//go:embed`
-2. **Platform detection** - Detects your OS and architecture at runtime
-3. **Extraction** - Extracts only the ~30MB of binaries for your platform
-4. **Caching** - Writes `.version` file to avoid re-extracting
+By default, `EnsureLibraries()` will:
+1. Check the latest release from `enigmaneering/external`
+2. Compare with the currently installed version (stored in `external/.version`)
+3. Automatically download and upgrade if a newer version is available
 
-## Module Size
+Example output when upgrading:
+```
+Upgrading external libraries: v0.0.42 → v0.0.43
+Downloading glslang from https://github.com/...
+Successfully installed glslang
+...
+```
 
-The Go module download is **~292MB** because it includes binaries for all platforms:
-- darwin-amd64, darwin-arm64
-- linux-amd64, linux-arm64
-- windows-amd64, windows-arm64
-
-But only **~30MB** is extracted for your specific platform.
+Example output when up-to-date:
+```
+External libraries already up-to-date (v0.0.43)
+```
 
 ## Freezing Versions
 
-To prevent automatic extraction checks, create a `FREEZE` file:
+To prevent automatic updates and lock to a specific version:
 
 ```bash
-touch external/FREEZE
+# In your project's external directory
+touch external/freeze
 ```
 
-When the `FREEZE` file exists:
-- `EnsureLibraries()` becomes a no-op if libraries are already present
-- No version checks are performed
-- Message displayed: `External libraries frozen at version v0.0.44`
+When the `freeze` file exists:
+- No automatic updates will occur
+- The currently installed version will be used
+- A message will be displayed: `External libraries frozen at version v0.0.42`
 
-To re-enable automatic checks:
+To re-enable automatic updates:
 
 ```bash
-rm external/FREEZE
+rm external/freeze
 ```
 
-**Note**: The `FREEZE` file should not be committed to version control.
+**Note**: The `freeze` file should not be committed to version control (it's in `.gitignore`). This is a per-developer preference for local development environments.
 
 ## Configuration
 
@@ -74,30 +80,31 @@ Set the `EXTERNAL_DIR` environment variable to change the installation directory
 export EXTERNAL_DIR=/path/to/custom/external
 ```
 
+## Version Selection
+
+Use a specific release version:
+
+```go
+if err := external.EnsureLibrariesVersion("v0.0.42"); err != nil {
+    log.Fatal(err)
+}
+```
+
+## Version Tracking
+
+The module tracks installed versions in `external/.version`. This file is automatically managed and should not be manually edited.
+
 ## Supported Platforms
 
-| OS      | Architecture | Status |
-|---------|--------------|--------|
-| macOS   | amd64 (Intel)| ✅     |
-| macOS   | arm64 (Apple Silicon) | ✅ |
-| Linux   | amd64        | ✅     |
-| Linux   | arm64        | ✅     |
-| Windows | amd64        | ✅     |
-| Windows | arm64        | ✅     |
+- macOS ARM64 (darwin-arm64)
+- macOS Intel (darwin-amd64)
+- Linux x86_64 (linux-amd64)
+- Linux ARM64 (linux-arm64)
+- Windows x86_64 (windows-amd64)
+- Windows ARM64 (windows-arm64)
 
 ## Included Libraries
 
 - **glslang**: GLSL to SPIRV compiler with optimizer
-- **SPIRV-Cross**: SPIRV transpiler (GLSL/HLSL/MSL/WGSL)
+- **SPIRV-Cross**: SPIRV transpiler (GLSL/HLSL/MSL)
 - **DXC**: DirectX Shader Compiler (HLSL to SPIRV/DXIL)
-- **Naga**: WebGPU shader compiler (WGSL to SPIRV)
-
-## Version
-
-Current embedded version: **v0.0.44**
-
-Includes latest stable releases from:
-- glslang (KhronosGroup)
-- SPIRV-Cross (Vulkan SDK)
-- DXC (Microsoft DirectXShaderCompiler)
-- Naga (wgpu project)

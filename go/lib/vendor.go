@@ -4,19 +4,24 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
-	"embed"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 )
 
-//go:embed binaries/*
-var embeddedBinaries embed.FS
+const (
+	githubRepo = "enigmaneering/external"
+)
 
-const embeddedVersion = "v0.0.44"
+// GitHubRelease represents a GitHub release
+type GitHubRelease struct {
+	TagName string `json:"tag_name"`
+}
 
 // GetExternalDir returns the path where external libraries should be installed
 // Defaults to ./external relative to the caller's working directory
@@ -27,109 +32,122 @@ func GetExternalDir() string {
 	return "external"
 }
 
-// EnsureLibraries extracts embedded external libraries if not present
-// If a 'FREEZE' file exists in the external directory, checks are skipped
+// getLatestVersion queries GitHub for the latest release tag
+func getLatestVersion() (string, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", githubRepo)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to query GitHub API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned status: %s", resp.Status)
+	}
+
+	var release GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", fmt.Errorf("failed to parse GitHub response: %w", err)
+	}
+
+	if release.TagName == "" {
+		return "", fmt.Errorf("no tag name in GitHub response")
+	}
+
+	return release.TagName, nil
+}
+
+// EnsureLibraries downloads and extracts all external libraries if not present
+// Automatically uses the latest release version and re-downloads if a newer version is available
+// If a 'FREEZE' file exists in the external directory, automatic updates are disabled
 func EnsureLibraries() error {
 	externalDir := GetExternalDir()
 
-	// Check if frozen - if so, skip all checks
+	// Check if frozen - if so, only install if nothing is present
 	if isFrozen(externalDir) {
-		return nil
+		installedVersion, err := getInstalledVersion(externalDir)
+		if err == nil && installedVersion != "" {
+			fmt.Printf("External libraries frozen at version %s\n", installedVersion)
+			fmt.Printf("(Remove 'FREEZE' file in external directory to enable automatic updates)\n")
+			return nil
+		}
+		// Frozen but nothing installed - still need initial install
+		fmt.Printf("External libraries frozen, but nothing installed yet\n")
+		fmt.Printf("Please manually download a release or remove 'FREEZE' file\n")
+		return fmt.Errorf("frozen external directory with no libraries installed")
+	}
+
+	version, err := getLatestVersion()
+	if err != nil {
+		return fmt.Errorf("failed to determine latest version: %w", err)
 	}
 
 	// Check if we already have this version installed
 	installedVersion, err := getInstalledVersion(externalDir)
-	if err == nil && installedVersion == embeddedVersion {
+	if err == nil && installedVersion == version {
+		fmt.Printf("External libraries already up-to-date (%s)\n", version)
 		return nil
 	}
 
-	if installedVersion != "" && installedVersion != embeddedVersion {
-		fmt.Printf("Upgrading external libraries: %s → %s\n", installedVersion, embeddedVersion)
+	if installedVersion != "" {
+		fmt.Printf("Upgrading external libraries: %s → %s\n", installedVersion, version)
 		// Clean out old version
 		if err := cleanExternalDir(externalDir); err != nil {
 			return fmt.Errorf("failed to clean external directory: %w", err)
 		}
-	} else if installedVersion == "" {
-		fmt.Printf("Installing external libraries: %s\n", embeddedVersion)
+	} else {
+		fmt.Printf("Installing external libraries: %s\n", version)
 	}
 
-	return extractEmbeddedLibraries(externalDir)
+	return EnsureLibrariesVersion(version)
 }
 
-// extractEmbeddedLibraries extracts all embedded binaries for the current platform
-func extractEmbeddedLibraries(externalDir string) error {
+// EnsureLibrariesVersion downloads and extracts external libraries for a specific version
+func EnsureLibrariesVersion(version string) error {
+	externalDir := GetExternalDir()
+
 	platform := detectPlatform()
 	if platform == "" {
 		return fmt.Errorf("unsupported platform: %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
-	// Extract each library
+	// Download each library
 	libraries := []string{"glslang", "spirv-cross", "dxc", "naga"}
 	for _, lib := range libraries {
-		if err := extractLibrary(lib, platform, externalDir); err != nil {
-			return fmt.Errorf("failed to extract %s: %w", lib, err)
+		if err := downloadLibrary(lib, platform, version, externalDir); err != nil {
+			return fmt.Errorf("failed to download %s: %w", lib, err)
 		}
 	}
 
 	// Write version file to track what's installed
-	if err := writeVersionFile(externalDir, embeddedVersion); err != nil {
+	if err := writeVersionFile(externalDir, version); err != nil {
 		fmt.Printf("Warning: Could not write version file: %v\n", err)
 	}
 
 	return nil
 }
 
-// extractLibrary extracts a single library from embedded binaries
-func extractLibrary(library, platform, externalDir string) error {
-	// Determine file extension based on library and platform
-	ext := ".tar.gz"
-	if library == "dxc" && strings.HasPrefix(platform, "windows-") {
-		ext = ".zip"
+// isInstalled checks if external libraries are already present
+func isInstalled(externalDir string) bool {
+	// Check for key binaries/libraries
+	markers := []string{
+		filepath.Join(externalDir, "glslang"),
+		filepath.Join(externalDir, "spirv-cross"),
+		filepath.Join(externalDir, "dxc"),
+		filepath.Join(externalDir, "naga"),
 	}
 
-	filename := fmt.Sprintf("%s-%s%s", library, platform, ext)
-	embeddedPath := fmt.Sprintf("binaries/%s", filename)
-
-	fmt.Printf("Extracting %s...\n", library)
-
-	// Open embedded file
-	file, err := embeddedBinaries.Open(embeddedPath)
-	if err != nil {
-		return fmt.Errorf("failed to open embedded file %s: %w", embeddedPath, err)
-	}
-	defer file.Close()
-
-	// Create temporary file for extraction
-	tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s-*%s", library, ext))
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
-
-	// Copy embedded file to temp
-	if _, err := io.Copy(tmpFile, file); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-	tmpFile.Close()
-
-	// Extract based on file type
-	if ext == ".tar.gz" {
-		if err := extractTarGz(tmpPath, externalDir, library, platform); err != nil {
-			return fmt.Errorf("failed to extract tar.gz: %w", err)
-		}
-	} else {
-		if err := extractZip(tmpPath, externalDir, library, platform); err != nil {
-			return fmt.Errorf("failed to extract zip: %w", err)
+	for _, marker := range markers {
+		if _, err := os.Stat(marker); os.IsNotExist(err) {
+			return false
 		}
 	}
 
-	fmt.Printf("Successfully installed %s\n", library)
-	return nil
+	return true
 }
 
-// detectPlatform returns the platform string for binaries
+// detectPlatform returns the platform string for GitHub release artifacts
 func detectPlatform() string {
 	goos := runtime.GOOS
 	goarch := runtime.GOARCH
@@ -156,6 +174,60 @@ func detectPlatform() string {
 	}
 
 	return fmt.Sprintf("%s-%s", os, arch)
+}
+
+// downloadLibrary downloads and extracts a single library
+func downloadLibrary(library, platform, version, externalDir string) error {
+	// Determine file extension based on library and platform
+	ext := ".tar.gz"
+	if library == "dxc" && strings.HasPrefix(platform, "windows-") {
+		ext = ".zip"
+	}
+
+	filename := fmt.Sprintf("%s-%s%s", library, platform, ext)
+	url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", githubRepo, version, filename)
+
+	fmt.Printf("Downloading %s from %s...\n", library, url)
+
+	// Download file
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to download: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status: %s", resp.Status)
+	}
+
+	// Create temporary file
+	tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s-*.%s", library, ext))
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	// Write to temp file
+	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	// Extract based on file type
+	tmpFile.Close() // Close before extraction
+
+	if ext == ".tar.gz" {
+		if err := extractTarGz(tmpFile.Name(), externalDir, library, platform); err != nil {
+			return fmt.Errorf("failed to extract tar.gz: %w", err)
+		}
+	} else {
+		if err := extractZip(tmpFile.Name(), externalDir, library, platform); err != nil {
+			return fmt.Errorf("failed to extract zip: %w", err)
+		}
+	}
+
+	fmt.Printf("Successfully installed %s\n", library)
+	return nil
 }
 
 // extractTarGz extracts a .tar.gz file and renames the root directory
@@ -216,6 +288,42 @@ func extractTarGz(archivePath, destDir, library, platform string) error {
 	}
 
 	return nil
+}
+
+// getInstalledVersion reads the version file to determine what's currently installed
+func getInstalledVersion(externalDir string) (string, error) {
+	versionFile := filepath.Join(externalDir, ".version")
+	data, err := os.ReadFile(versionFile)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// writeVersionFile writes the current version to a file for future checks
+func writeVersionFile(externalDir, version string) error {
+	versionFile := filepath.Join(externalDir, ".version")
+	return os.WriteFile(versionFile, []byte(version+"\n"), 0644)
+}
+
+// cleanExternalDir removes all library directories to prepare for new installation
+func cleanExternalDir(externalDir string) error {
+	dirsToClean := []string{"glslang", "spirv-cross", "dxc", "naga"}
+	for _, dir := range dirsToClean {
+		libDir := filepath.Join(externalDir, dir)
+		if err := os.RemoveAll(libDir); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove %s: %w", libDir, err)
+		}
+	}
+	return nil
+}
+
+// isFrozen checks if a 'FREEZE' file exists in the external directory
+// If present, automatic updates are disabled
+func isFrozen(externalDir string) bool {
+	freezeFile := filepath.Join(externalDir, "FREEZE")
+	_, err := os.Stat(freezeFile)
+	return err == nil
 }
 
 // extractZip extracts a .zip file and renames the root directory
@@ -280,40 +388,4 @@ func extractZip(archivePath, destDir, library, platform string) error {
 	}
 
 	return nil
-}
-
-// getInstalledVersion reads the version file to determine what's currently installed
-func getInstalledVersion(externalDir string) (string, error) {
-	versionFile := filepath.Join(externalDir, ".version")
-	data, err := os.ReadFile(versionFile)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(data)), nil
-}
-
-// writeVersionFile writes the current version to a file for future checks
-func writeVersionFile(externalDir, version string) error {
-	versionFile := filepath.Join(externalDir, ".version")
-	return os.WriteFile(versionFile, []byte(version+"\n"), 0644)
-}
-
-// cleanExternalDir removes all library directories to prepare for new installation
-func cleanExternalDir(externalDir string) error {
-	dirsToClean := []string{"glslang", "spirv-cross", "dxc", "naga"}
-	for _, dir := range dirsToClean {
-		libDir := filepath.Join(externalDir, dir)
-		if err := os.RemoveAll(libDir); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove %s: %w", libDir, err)
-		}
-	}
-	return nil
-}
-
-// isFrozen checks if a 'FREEZE' file exists in the external directory
-// If present, automatic updates are disabled
-func isFrozen(externalDir string) bool {
-	freezeFile := filepath.Join(externalDir, "FREEZE")
-	_, err := os.Stat(freezeFile)
-	return err == nil
 }
