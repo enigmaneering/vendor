@@ -15,6 +15,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       gpu_version: ${{ steps.version.outputs.gpu_version }}
+      gpu_version_number: ${{ steps.version.outputs.gpu_version_number }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,10 +66,12 @@ jobs:
               GPU_PATCH=0
             fi
             GPU_VERSION="go/fetch/v1.0.${GPU_PATCH}"
+            GPU_VERSION_NUMBER="v1.0.${GPU_PATCH}"
             git tag $GPU_VERSION
             git push origin $GPU_VERSION
             echo "Created module tag: $GPU_VERSION"
             echo "gpu_version=$GPU_VERSION" >> $GITHUB_OUTPUT
+            echo "gpu_version_number=$GPU_VERSION_NUMBER" >> $GITHUB_OUTPUT
           else
             # Tag push - use the tag name
             VERSION="${GITHUB_REF#refs/tags/}"
@@ -642,7 +645,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.determine-version.outputs.version }}
-          name: Shader Compilation Toolchain ${{ needs.determine-version.outputs.version }}
+          name: redistributables ${{ needs.determine-version.outputs.version }}
           draft: false
           prerelease: false
           files: |
@@ -744,7 +747,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.determine-version.outputs.gpu_version }}
-          name: Fetch CLI & Go Module ${{ needs.determine-version.outputs.gpu_version }}
+          name: fetch cli ${{ needs.determine-version.outputs.gpu_version_number }}
           draft: false
           prerelease: false
           files: |
