@@ -7,7 +7,85 @@ on:
   workflow_dispatch:
 
 jobs:
+  determine-version:
+    name: Determine Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to find all tags
+
+      - name: Calculate version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - calculate next version from latest tag
+            # Get all tags matching vX.Y.Z format (excluding go/lib tags)
+            LATEST_TAG=$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | sort -V | tail -1)
+            if [ -z "$LATEST_TAG" ]; then
+              LATEST_TAG="v0.0.0"
+            fi
+            echo "Latest tag: $LATEST_TAG"
+
+            # Extract version numbers (expecting vX.Y.Z format)
+            if [[ $LATEST_TAG =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+
+              # Increment patch version
+              NEXT_PATCH=$((PATCH + 1))
+              VERSION="v${MAJOR}.${MINOR}.${NEXT_PATCH}"
+            else
+              # Fallback if tag format is unexpected
+              VERSION="v0.0.43"
+            fi
+
+            # Sanity check - version should be >= v0.0.43
+            if [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              VER_MAJOR="${BASH_REMATCH[1]}"
+              VER_MINOR="${BASH_REMATCH[2]}"
+              VER_PATCH="${BASH_REMATCH[3]}"
+
+              # Check if version is less than v0.0.43
+              if [ "$VER_MAJOR" -eq 0 ] && [ "$VER_MINOR" -eq 0 ] && [ "$VER_PATCH" -lt 43 ]; then
+                echo "ERROR: Calculated version $VERSION is less than minimum v0.0.43"
+                echo "Latest tag found: $LATEST_TAG"
+                echo "This indicates a problem with version detection."
+                exit 1
+              fi
+            fi
+
+            echo "Next version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+            # Create and push the tag
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag $VERSION
+            git push origin $VERSION
+          else
+            # Tag push - use the tag name
+            VERSION="${GITHUB_REF#refs/tags/}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+            # Sanity check for tag pushes too
+            if [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              VER_MAJOR="${BASH_REMATCH[1]}"
+              VER_MINOR="${BASH_REMATCH[2]}"
+              VER_PATCH="${BASH_REMATCH[3]}"
+
+              if [ "$VER_MAJOR" -eq 0 ] && [ "$VER_MINOR" -eq 0 ] && [ "$VER_PATCH" -lt 43 ]; then
+                echo "ERROR: Tag $VERSION is less than minimum v0.0.43"
+                exit 1
+              fi
+            fi
+          fi
+
   build-glslang:
+    needs: [determine-version]
     name: Build glslang
     strategy:
       fail-fast: true
@@ -113,6 +191,7 @@ jobs:
           path: ${{ runner.temp }}/output/glslang-${{ matrix.platform }}.*
 
   build-spirv-cross:
+    needs: [determine-version]
     name: Build SPIRV-Cross
     strategy:
       fail-fast: true
@@ -213,6 +292,7 @@ jobs:
           path: ${{ runner.temp }}/output/spirv-cross-${{ matrix.platform }}.*
 
   build-dxc:
+    needs: [determine-version]
     name: Build DXC (from source)
     strategy:
       fail-fast: true
@@ -257,6 +337,7 @@ jobs:
           path: ${{ runner.temp }}/output/dxc-${{ matrix.platform }}.*
 
   download-dxc-prebuilt:
+    needs: [determine-version]
     name: Download DXC (Prebuilt)
     strategy:
       fail-fast: true
@@ -412,6 +493,7 @@ jobs:
             output/dxc-${{ matrix.platform }}.zip
 
   build-naga:
+    needs: [determine-version]
     name: Build Naga
     strategy:
       fail-fast: true
@@ -480,7 +562,7 @@ jobs:
 
   create-release:
     name: Create Release
-    needs: [build-glslang, build-spirv-cross, build-dxc, download-dxc-prebuilt, build-naga]
+    needs: [determine-version, build-glslang, build-spirv-cross, build-dxc, download-dxc-prebuilt, build-naga]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -495,50 +577,11 @@ jobs:
       - name: Display artifact structure
         run: ls -R artifacts
 
-      - name: Determine version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual trigger - calculate next version from latest tag
-            # Get all tags matching vX.Y.Z format (excluding go/lib tags)
-            LATEST_TAG=$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | sort -V | tail -1)
-            if [ -z "$LATEST_TAG" ]; then
-              LATEST_TAG="v0.0.0"
-            fi
-            echo "Latest tag: $LATEST_TAG"
-
-            # Extract version numbers (expecting vX.Y.Z format)
-            if [[ $LATEST_TAG =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-              MAJOR="${BASH_REMATCH[1]}"
-              MINOR="${BASH_REMATCH[2]}"
-              PATCH="${BASH_REMATCH[3]}"
-
-              # Increment patch version
-              NEXT_PATCH=$((PATCH + 1))
-              VERSION="v${MAJOR}.${MINOR}.${NEXT_PATCH}"
-            else
-              # Fallback if tag format is unexpected
-              VERSION="v0.0.43"
-            fi
-
-            echo "Next version: $VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-            # Create and push the tag
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag $VERSION
-            git push origin $VERSION
-          else
-            # Tag push - use the tag name
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.determine-version.outputs.version }}
+          name: Release ${{ needs.determine-version.outputs.version }}
           draft: false
           prerelease: false
           files: |
