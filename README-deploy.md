@@ -4,7 +4,7 @@ Pre-built shader compilation toolchain binaries automatically managed by the `en
 
 ## What's Installed
 
-This directory contains three shader compilation tools:
+This directory contains four shader compilation tools:
 
 ### glslang
 - **Location**: `glslang/bin/glslangValidator`
@@ -15,7 +15,7 @@ This directory contains three shader compilation tools:
 
 ### SPIRV-Cross
 - **Location**: `spirv-cross/bin/spirv-cross`
-- **Purpose**: SPIRV to GLSL/HLSL/MSL transpiler
+- **Purpose**: SPIRV to GLSL/HLSL/MSL/WGSL transpiler
 - **License**: Apache-2.0
 - **Source**: https://github.com/KhronosGroup/SPIRV-Cross
 
@@ -25,6 +25,13 @@ This directory contains three shader compilation tools:
 - **License**: University of Illinois/NCSA Open Source License
 - **Source**: https://github.com/microsoft/DirectXShaderCompiler
 - **Note**: Windows binaries are official Microsoft redistributables from NuGet
+
+### Naga
+- **Location**: `naga/bin/naga` (or `naga.exe` on Windows)
+- **Purpose**: WGSL to SPIRV compiler
+- **License**: Apache-2.0 / MIT
+- **Source**: https://github.com/gfx-rs/naga
+- **Note**: Part of the WebGPU ecosystem (wgpu project)
 
 ## Version Information
 

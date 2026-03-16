@@ -411,9 +411,76 @@ jobs:
             output/dxc-${{ matrix.platform }}.tar.gz
             output/dxc-${{ matrix.platform }}.zip
 
+  build-naga:
+    name: Build Naga
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: macos-latest
+            runner: macos-14  # ARM64
+            platform: darwin-arm64
+            macos_arch: arm64
+          - os: macos-latest
+            runner: macos-14  # Cross-compile x86_64 on ARM64
+            platform: darwin-amd64
+            macos_arch: x86_64
+          - os: ubuntu-latest
+            runner: ubuntu-latest
+            platform: linux-amd64
+          - os: ubuntu-latest
+            runner: ubuntu-24.04-arm
+            platform: linux-arm64
+          - os: windows-latest
+            runner: windows-latest
+            platform: windows-amd64
+          - os: windows-latest
+            runner: windows-latest
+            platform: windows-arm64
+            cross_compile_target: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.platform == 'linux-arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Build Naga (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          chmod +x scripts/build-naga.sh
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
+          CROSS_COMPILE_TARGET="${{ matrix.cross_compile_target || '' }}" \
+          bash scripts/build-naga.sh
+
+      - name: Build Naga (macOS/Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          chmod +x scripts/build-naga.sh
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
+          MACOS_ARCH="${{ matrix.macos_arch || '' }}" \
+          CMAKE_ARCH="${{ matrix.platform == 'linux-arm64' && 'aarch64' || '' }}" \
+          bash scripts/build-naga.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: naga-${{ matrix.platform }}
+          path: ${{ runner.temp }}/output/naga-${{ matrix.platform }}.*
+
   create-release:
     name: Create Release
-    needs: [build-glslang, build-spirv-cross, build-dxc, download-dxc-prebuilt]
+    needs: [build-glslang, build-spirv-cross, build-dxc, download-dxc-prebuilt, build-naga]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -433,7 +500,11 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # Manual trigger - calculate next version from latest tag
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            # Get all tags matching vX.Y.Z format (excluding go/lib tags)
+            LATEST_TAG=$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | sort -V | tail -1)
+            if [ -z "$LATEST_TAG" ]; then
+              LATEST_TAG="v0.0.0"
+            fi
             echo "Latest tag: $LATEST_TAG"
 
             # Extract version numbers (expecting vX.Y.Z format)

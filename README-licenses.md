@@ -13,6 +13,7 @@ Each tool package includes its licenses preserved from the original source:
 - **glslang**: Main `LICENSE.txt` plus `LICENSES/` directory with dependency licenses (SPIRV-Tools, SPIRV-Headers)
 - **SPIRV-Cross**: Main `LICENSE` plus `LICENSES/` directory with additional license texts
 - **DXC**: Main `LICENSE.TXT` plus `LICENSES/` directory with component licenses (DxilCompression, LLVM)
+- **Naga**: Main `LICENSE` plus `LICENSES/` directory if present
 
 ### Upstream Sources
 
@@ -21,6 +22,7 @@ Licenses are pulled directly from:
 - **glslang**: https://github.com/KhronosGroup/glslang
 - **SPIRV-Cross**: https://github.com/KhronosGroup/SPIRV-Cross
 - **DXC**: https://github.com/microsoft/DirectXShaderCompiler (or Microsoft NuGet for Windows)
+- **Naga**: https://github.com/gfx-rs/naga
 
 ## License Types
 
@@ -31,6 +33,7 @@ Licenses are pulled directly from:
 - **DXC**: University of Illinois/NCSA Open Source License
 - **DxilCompression**: RAD Game Tools/Valve Software
 - **LLVM**: Apache-2.0 with LLVM Exceptions
+- **Naga**: Apache-2.0 / MIT
 
 All licenses permit redistribution of precompiled binaries.
 

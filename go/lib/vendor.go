@@ -113,7 +113,7 @@ func EnsureLibrariesVersion(version string) error {
 	}
 
 	// Download each library
-	libraries := []string{"glslang", "spirv-cross", "dxc"}
+	libraries := []string{"glslang", "spirv-cross", "dxc", "naga"}
 	for _, lib := range libraries {
 		if err := downloadLibrary(lib, platform, version, externalDir); err != nil {
 			return fmt.Errorf("failed to download %s: %w", lib, err)
@@ -135,6 +135,7 @@ func isInstalled(externalDir string) bool {
 		filepath.Join(externalDir, "glslang"),
 		filepath.Join(externalDir, "spirv-cross"),
 		filepath.Join(externalDir, "dxc"),
+		filepath.Join(externalDir, "naga"),
 	}
 
 	for _, marker := range markers {
@@ -307,7 +308,7 @@ func writeVersionFile(externalDir, version string) error {
 
 // cleanExternalDir removes all library directories to prepare for new installation
 func cleanExternalDir(externalDir string) error {
-	dirsToClean := []string{"glslang", "spirv-cross", "dxc"}
+	dirsToClean := []string{"glslang", "spirv-cross", "dxc", "naga"}
 	for _, dir := range dirsToClean {
 		libDir := filepath.Join(externalDir, dir)
 		if err := os.RemoveAll(libDir); err != nil && !os.IsNotExist(err) {

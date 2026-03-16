@@ -134,8 +134,11 @@ jobs:
         if: steps.check.outputs.needs_release == 'true'
         id: next_version
         run: |
-          # Get latest release tag
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          # Get latest release tag (only vX.Y.Z format, excluding go/lib tags)
+          LATEST_TAG=$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | sort -V | tail -1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0"
+          fi
           echo "Latest tag: $LATEST_TAG"
 
           # Extract version numbers (expecting vX.Y.Z format)
