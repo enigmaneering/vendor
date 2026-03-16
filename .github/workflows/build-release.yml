@@ -807,7 +807,7 @@ jobs:
                 }
 
                 // Or specify a version and custom directory
-                os.Setenv("EXTERNAL_DIR", "./my-shaders")
+                os.Setenv("ENIGMATIC_GOFETCH_DIRECTORY", "./my-shaders")
                 if err := gpu.EnsureLibrariesVersion("${{ needs.determine-version.outputs.version }}"); err != nil {
                     log.Fatal(err)
                 }

@@ -25,7 +25,7 @@ func main() {
 		flag.PrintDefaults()
 		fmt.Println()
 		fmt.Println("Environment Variables:")
-		fmt.Println("  EXTERNAL_DIR - Override installation directory")
+		fmt.Println("  ENIGMATIC_GOFETCH_DIRECTORY - Override installation directory")
 		fmt.Println()
 		fmt.Println("Examples:")
 		fmt.Println("  fetch                    # Install latest version to ./external")
@@ -40,7 +40,7 @@ func main() {
 
 	// Set directory if specified
 	if *dir != "external" {
-		os.Setenv("EXTERNAL_DIR", *dir)
+		os.Setenv("ENIGMATIC_GOFETCH_DIRECTORY", *dir)
 	}
 
 	var err error

@@ -29,8 +29,9 @@ type GitHubRelease struct {
 
 // GetExternalDir returns the path where external libraries should be installed
 // Defaults to ./external relative to the caller's working directory
+// Can be overridden with ENIGMATIC_GOFETCH_DIRECTORY environment variable
 func GetExternalDir() string {
-	if dir := os.Getenv("EXTERNAL_DIR"); dir != "" {
+	if dir := os.Getenv("ENIGMATIC_GOFETCH_DIRECTORY"); dir != "" {
 		return dir
 	}
 	return "external"
