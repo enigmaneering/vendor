@@ -37,9 +37,10 @@ func GetExternalDir() string {
 	return "external"
 }
 
-// getLatestVersion queries GitHub for the latest release tag
+// getLatestVersion queries GitHub for the latest redistributables release tag
+// This filters for releases starting with "v0." to avoid go/fetch releases
 func getLatestVersion() (string, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", githubRepo)
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases?per_page=30", githubRepo)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -51,16 +52,19 @@ func getLatestVersion() (string, error) {
 		return "", fmt.Errorf("GitHub API returned status: %s", resp.Status)
 	}
 
-	var release GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	var releases []GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
 		return "", fmt.Errorf("failed to parse GitHub response: %w", err)
 	}
 
-	if release.TagName == "" {
-		return "", fmt.Errorf("no tag name in GitHub response")
+	// Find the first release that starts with "v0." (redistributables)
+	for _, release := range releases {
+		if strings.HasPrefix(release.TagName, "v0.") {
+			return release.TagName, nil
+		}
 	}
 
-	return release.TagName, nil
+	return "", fmt.Errorf("no redistributables release found (looking for v0.x.x tags)")
 }
 
 // EnsureLibraries downloads and extracts all external libraries if not present
