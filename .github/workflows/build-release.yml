@@ -641,7 +641,7 @@ jobs:
       - name: Display artifact structure
         run: ls -R artifacts
 
-      - name: Create Shader Binaries Release
+      - name: Create redistributables Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.determine-version.outputs.version }}
@@ -753,15 +753,17 @@ jobs:
           files: |
             artifacts/**/fetch-*
           body: |
-            # go/fetch - Shader Toolchain Installer ${{ needs.determine-version.outputs.gpu_version }}
+            # go/fetch ${{ needs.determine-version.outputs.gpu_version }}
 
-            Automated installer and Go module for managing the [shader compilation toolchain](https://github.com/enigmaneering/external/releases/tag/${{ needs.determine-version.outputs.version }}).
+            CLI tool and Go module that downloads and extracts the enigmaneering redistributable binaries.
+
+            This version fetches [redistributables ${{ needs.determine-version.outputs.version }}](https://github.com/enigmaneering/external/releases/tag/${{ needs.determine-version.outputs.version }}). View [all redistributable releases](https://github.com/enigmaneering/external/releases?q=redistributables) to see available versions.
 
             ## 🚀 Quick Start
 
             ### Using the fetch CLI
 
-            Download the `fetch` binary for your platform and run it to automatically install the shader toolchain:
+            Run the `fetch` binary to download the shader toolchain binaries:
 
             ```bash
             # macOS ARM64 (Apple Silicon)
@@ -795,18 +797,16 @@ jobs:
 
             ### Using the Go Module
 
-            Add automatic toolchain management to your Go application:
-
             ```go
             import "github.com/enigmaneering/external/go/fetch/gpu"
 
             func main() {
-                // Downloads latest toolchain to ./external/
+                // Downloads and extracts latest toolchain to ./external/
                 if err := gpu.EnsureLibraries(); err != nil {
                     log.Fatal(err)
                 }
 
-                // Or specify a version and custom directory
+                // Specify a version and custom directory
                 os.Setenv("ENIGMATIC_GOFETCH_DIRECTORY", "./my-shaders")
                 if err := gpu.EnsureLibrariesVersion("${{ needs.determine-version.outputs.version }}"); err != nil {
                     log.Fatal(err)
@@ -814,45 +814,40 @@ jobs:
             }
             ```
 
-            Install the module:
-
+            Install:
             ```bash
             go get github.com/enigmaneering/external/go/fetch@${{ needs.determine-version.outputs.gpu_version }}
             ```
 
-            ## 📦 What Gets Installed
+            ## 📦 Downloads
 
-            This version of fetch installs shader toolchain version [${{ needs.determine-version.outputs.version }}](https://github.com/enigmaneering/external/releases/tag/${{ needs.determine-version.outputs.version }}):
+            This fetches [${{ needs.determine-version.outputs.version }}](https://github.com/enigmaneering/external/releases/tag/${{ needs.determine-version.outputs.version }}) containing:
 
-            - **glslang** - GLSL/ESSL → SPIRV compiler with optimizer
+            - **glslang** - GLSL/ESSL → SPIRV compiler
             - **SPIRV-Cross** - SPIRV → GLSL/HLSL/MSL/WGSL transpiler
-            - **DXC** - DirectX Shader Compiler (HLSL → SPIRV/DXIL, WGSL support)
-            - **Naga** - WebGPU shader compiler (WGSL/GLSL/SPIRV multi-format support)
+            - **DXC** - HLSL → SPIRV/DXIL compiler
+            - **Naga** - WGSL/GLSL/SPIRV multi-format compiler
 
-            ## 💻 Supported Platforms
+            ## 💻 Platforms
 
-            - ✅ macOS ARM64 (Apple Silicon)
-            - ✅ macOS x86_64 (Intel)
-            - ✅ Linux x86_64
-            - ✅ Linux ARM64
-            - ✅ Windows x86_64
-            - ✅ Windows ARM64
+            - macOS ARM64, x86_64
+            - Linux ARM64, x86_64
+            - Windows ARM64, x86_64
 
-            ## 🔄 Version Management
+            ## 🔄 Features
 
-            The fetch tool includes intelligent version management:
-            - Automatic detection of installed toolchain version
-            - Upgrade to latest version when available
-            - Create a `FREEZE` file in the external directory to pin the current version
+            - Automatic version detection and upgrades
+            - Create `FREEZE` file to pin version
             - Version tracking via `.version` file
+            - Custom directory via `ENIGMATIC_GOFETCH_DIRECTORY`
 
-            ## 📝 CLI Options
+            ## 📝 CLI Usage
 
             ```bash
+            fetch                     # Download latest
+            fetch --version v0.0.45   # Download specific version
+            fetch --dir ./shaders     # Custom output directory
             fetch --help              # Show help
-            fetch                     # Install latest version
-            fetch --version v0.0.45   # Install specific version
-            fetch --dir ./shaders     # Install to custom directory
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
