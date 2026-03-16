@@ -7,8 +7,9 @@ Pre-built shader compilation toolchain binaries for cross-platform development w
 - **glslang** - GLSL to SPIRV compiler with optimizer support
   - Includes SPIRV-Tools (optimizer and validator)
   - Includes SPIRV-Headers (required headers)
-- **SPIRV-Cross** - SPIRV to GLSL/HLSL/MSL transpiler
+- **SPIRV-Cross** - SPIRV to GLSL/HLSL/MSL/WGSL transpiler
 - **DXC** - DirectX Shader Compiler (HLSL to SPIRV/DXIL)
+- **Naga** - WebGPU shader compiler (WGSL to SPIRV)
 
 ## Supported Platforms
 
@@ -74,8 +75,8 @@ Download prebuilt binaries from the latest release:
 VERSION="v0.0.42"  # or use 'latest'
 PLATFORM="darwin-arm64"  # darwin-amd64, linux-amd64, linux-arm64, windows-amd64, windows-arm64
 
-# Download all three tools
-for tool in glslang spirv-cross dxc; do
+# Download all four tools
+for tool in glslang spirv-cross dxc naga; do
   curl -L -o "${tool}.tar.gz" \
     "https://github.com/enigmaneering/external/releases/download/${VERSION}/${tool}-${PLATFORM}.tar.gz"
   tar -xzf "${tool}.tar.gz" -C external/
@@ -113,6 +114,12 @@ done
 - Built from latest Vulkan SDK tag
 - All platforms built from source
 
+### Naga
+
+- Built from latest wgpu release
+- Rust-based WGSL to SPIRV compiler
+- All platforms built from source
+
 ## Creating Releases
 
 ### Automatic (Default)
@@ -144,6 +151,7 @@ Each release includes a `CURRENT_VERSIONS.txt` file documenting the exact upstre
 DXC=1.9.2602.17
 GLSLANG=16.2.0
 SPIRV_CROSS=vulkan-sdk-1.4.341.0
+NAGA=24.0.0
 UPDATED=2026-03-15 02:00:00 UTC
 ```
 
@@ -155,5 +163,6 @@ Summary:
 - glslang (+ SPIRV-Tools/SPIRV-Headers): BSD-3-Clause / Apache-2.0
 - SPIRV-Cross: Apache-2.0
 - DXC: University of Illinois/NCSA Open Source License
+- Naga: Apache-2.0 / MIT
 
 All licenses permit redistribution of precompiled binaries.
