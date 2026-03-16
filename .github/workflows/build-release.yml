@@ -530,13 +530,13 @@ jobs:
       - name: Build fetch (Unix)
         if: runner.os != 'Windows'
         run: |
-          cd go/fetch/gpu
+          cd go/fetch/gpu/cmd/fetch
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o fetch-${{ matrix.platform }}
 
       - name: Build fetch (Windows)
         if: runner.os == 'Windows'
         run: |
-          cd go/fetch/gpu
+          cd go/fetch/gpu/cmd/fetch
           $env:GOOS="${{ matrix.goos }}"
           $env:GOARCH="${{ matrix.goarch }}"
           go build -o fetch-${{ matrix.platform }}.exe
@@ -546,8 +546,8 @@ jobs:
         with:
           name: fetch-${{ matrix.platform }}
           path: |
-            go/fetch/gpu/fetch-${{ matrix.platform }}
-            go/fetch/gpu/fetch-${{ matrix.platform }}.exe
+            go/fetch/gpu/cmd/fetch/fetch-${{ matrix.platform }}
+            go/fetch/gpu/cmd/fetch/fetch-${{ matrix.platform }}.exe
 
   build-naga:
     needs: [determine-version]
