@@ -159,7 +159,7 @@ jobs:
             ### Using the Go Module
 
             ```go
-            import "github.com/enigmaneering/redistributables/go/fetch/gpu"
+            import "git.enigmaneering.org/enigmaneering/redistributables/go/fetch/gpu"
 
             func main() {
                 // Downloads and extracts latest toolchain to ./external/
@@ -177,7 +177,7 @@ jobs:
 
             Install:
             ```bash
-            go get github.com/enigmaneering/redistributables/go/fetch@go/fetch/${{ inputs.version }}
+            go get git.enigmaneering.org/enigmaneering/redistributables/go/fetch@go/fetch/${{ inputs.version }}
             ```
 
             ## 📦 Downloads

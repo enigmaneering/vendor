@@ -58,7 +58,7 @@ fetch || exit 1
 ## Go Package Usage
 
 ```go
-import "github.com/enigmaneering/external/go/fetch/gpu"
+import "git.enigmaneering.org/enigmaneering/redistributables/go/fetch/gpu"
 
 func main() {
     // Automatically download and extract external libraries

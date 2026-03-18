@@ -588,7 +588,7 @@ jobs:
             Or use the Go module:
 
             ```go
-            import "github.com/enigmaneering/external/go/fetch/gpu"
+            import "git.enigmaneering.org/enigmaneering/redistributables/go/fetch/gpu"
 
             func main() {
                 // Automatically downloads latest toolchain to ./external/
