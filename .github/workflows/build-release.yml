@@ -538,9 +538,60 @@ jobs:
           name: naga-${{ matrix.platform }}
           path: ${{ runner.temp }}/output/naga-${{ matrix.platform }}.*
 
+  build-pocl:
+    needs: [determine-version]
+    name: Build POCL
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: macos-latest
+            runner: macos-14  # ARM64
+            platform: darwin-arm64
+            macos_arch: arm64
+          - os: macos-latest
+            runner: macos-14  # Cross-compile x86_64 on ARM64
+            platform: darwin-amd64
+            macos_arch: x86_64
+          - os: ubuntu-latest
+            runner: ubuntu-latest
+            platform: linux-amd64
+          - os: ubuntu-latest
+            runner: ubuntu-24.04-arm
+            platform: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm-dev clang libclang-dev cmake pkg-config libhwloc-dev ocl-icd-opencl-dev
+
+      - name: Install LLVM (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm cmake pkg-config hwloc
+
+      - name: Build POCL (macOS/Linux)
+        shell: bash
+        run: |
+          chmod +x scripts/build-pocl.sh
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
+          MACOS_ARCH="${{ matrix.macos_arch || '' }}" \
+          bash scripts/build-pocl.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocl-${{ matrix.platform }}
+          path: ${{ runner.temp }}/output/pocl-${{ matrix.platform }}.*
+
   create-release:
     name: Create Shader Binaries Release
-    needs: [determine-version, build-glslang, build-spirv-cross, build-dxc, download-dxc-prebuilt, build-naga]
+    needs: [determine-version, build-glslang, build-spirv-cross, build-dxc, download-dxc-prebuilt, build-naga, build-pocl]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -551,7 +602,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: '{glslang,spirv-cross,dxc,naga}-*'
+          pattern: '{glslang,spirv-cross,dxc,naga,pocl}-*'
 
       - name: Display artifact structure
         run: ls -R artifacts
@@ -605,6 +656,7 @@ jobs:
             | **SPIRV-Cross** | SPIRV reflection and transpiler | SPIRV → GLSL/HLSL/MSL/WGSL |
             | **DXC** | DirectX Shader Compiler | HLSL → SPIRV/DXIL, WGSL support |
             | **Naga** | Rust-based WebGPU shader compiler | WGSL/GLSL/SPIRV ↔ SPIRV/WGSL/MSL/HLSL/GLSL |
+            | **POCL** | Portable Computing Language (OpenCL) | CPU-based OpenCL runtime with LLVM JIT |
 
             ## 💻 Supported Platforms
 
@@ -617,6 +669,8 @@ jobs:
             - ✅ Windows x86_64
             - ✅ Windows ARM64
 
+            **Note:** POCL is currently built for macOS and Linux platforms only.
+
             ## 📦 Manual Installation
 
             Download the appropriate `.tar.gz` (Unix) or `.zip` (Windows) archives for your platform and extract them to your project's `external/` directory.
@@ -626,6 +680,7 @@ jobs:
             - `spirv-cross-{platform}.tar.gz` / `.zip`
             - `dxc-{platform}.tar.gz` / `.zip`
             - `naga-{platform}.tar.gz` / `.zip`
+            - `pocl-{platform}.tar.gz` (macOS/Linux only)
 
             ## 🔄 Version Management
 
