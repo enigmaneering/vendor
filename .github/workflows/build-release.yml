@@ -5,10 +5,179 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      trigger_reason:
+        description: "Why this build was triggered (auto-filled by version check)"
+        required: false
+        default: "Manual dispatch"
+        type: string
 
 jobs:
+  announce:
+    name: Trigger Info
+    runs-on: ubuntu-latest
+    steps:
+      - name: Display trigger reason
+        run: |
+          echo "## Build Trigger" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            REASON="${{ inputs.trigger_reason }}"
+            if [ -z "$REASON" ] || [ "$REASON" = "Manual dispatch" ]; then
+              echo "**Triggered by:** Manual dispatch" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "**Triggered by:** $REASON" >> $GITHUB_STEP_SUMMARY
+            fi
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "**Triggered by:** Tag push (${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Triggered by:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ================================================================
+  #  Verify upstream licenses haven't changed before building.
+  #  If any license hash doesn't match, the entire release is blocked.
+  # ================================================================
+  verify-licenses:
+    name: Verify Licenses
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for open license issue
+        id: existing
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'license-change'
+            });
+            if (issues.data.length > 0) {
+              core.setOutput('blocked', 'true');
+              core.setOutput('issue_url', issues.data[0].html_url);
+              core.info(`Blocked by open license issue: ${issues.data[0].html_url}`);
+            } else {
+              core.setOutput('blocked', 'false');
+            }
+
+      - name: Block if unresolved license issue exists
+        if: steps.existing.outputs.blocked == 'true'
+        run: |
+          echo "::error::Release blocked by unresolved license issue: ${{ steps.existing.outputs.issue_url }}"
+          echo "Close the issue after reviewing the license changes and updating the expected hashes."
+          exit 1
+
+      - name: Clone and verify upstream licenses
+        run: |
+          set -e
+          mkdir -p /tmp/license-check && cd /tmp/license-check
+
+          echo "Cloning upstream repositories..."
+          git clone --depth 1 https://github.com/KhronosGroup/glslang.git
+          git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Tools.git spirv-tools
+          git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git spirv-headers
+          git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Cross.git spirv-cross
+          git clone --depth 1 https://github.com/microsoft/DirectXShaderCompiler.git dxc
+          git clone --depth 1 https://github.com/gfx-rs/wgpu-native.git wgpu-native
+
+          # Expected hashes — update when licenses are reviewed and approved
+          EXPECTED_GLSLANG="17e70c676e1521ff3e4686f04a2053d93a7e28a33be8de7ec37ab0ff72feb677"
+          EXPECTED_SPIRV_TOOLS="cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          EXPECTED_SPIRV_HEADERS="ea43b1de38a6f90c488800d66dec1ed671e68cda530266bc96951fb5b6307613"
+          EXPECTED_SPIRV_CROSS="cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          EXPECTED_DXC="27a49e35d1da96eba18fba54bc882667ff0ff8c0254f16f2b6e165d605ba7df8"
+          EXPECTED_DXIL_COMP="6f20fa7672b00e2e975c291df737cf227addf3ad32e36fef3fe0f416e4664d3d"
+          EXPECTED_WGPU_MIT="c7fea58d1cfe49634cd92e54fc10a9d871f4b275321a4cd8c09e449122caaeb4"
+          EXPECTED_WGPU_APACHE="a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9"
+
+          FAILED=0
+          CHANGES=""
+
+          check() {
+            local name="$1" file="$2" expected="$3"
+            actual=$(sha256sum "$file" | awk '{print $1}')
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::$name license has CHANGED (expected $expected, got $actual)"
+              CHANGES="${CHANGES}- **${name}**: hash changed from \`${expected}\` to \`${actual}\`\n"
+              FAILED=1
+            else
+              echo "✅ $name license verified"
+            fi
+          }
+
+          check "glslang" glslang/LICENSE.txt "$EXPECTED_GLSLANG"
+          check "SPIRV-Tools" spirv-tools/LICENSE "$EXPECTED_SPIRV_TOOLS"
+          check "SPIRV-Headers" spirv-headers/LICENSE "$EXPECTED_SPIRV_HEADERS"
+          check "SPIRV-Cross" spirv-cross/LICENSE "$EXPECTED_SPIRV_CROSS"
+          check "DXC" dxc/LICENSE.TXT "$EXPECTED_DXC"
+          check "DxilCompression" dxc/lib/DxilCompression/LICENSE.TXT "$EXPECTED_DXIL_COMP"
+          check "wgpu-native MIT" wgpu-native/LICENSE.MIT "$EXPECTED_WGPU_MIT"
+          check "wgpu-native Apache" wgpu-native/LICENSE.APACHE "$EXPECTED_WGPU_APACHE"
+
+          echo "CHANGES<<EOF" >> $GITHUB_ENV
+          echo -e "$CHANGES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          if [ $FAILED -eq 1 ]; then
+            echo "LICENSE_FAILED=true" >> $GITHUB_ENV
+            exit 1
+          fi
+
+          echo ""
+          echo "All upstream licenses verified — proceeding with build."
+
+      - name: Create license issue
+        if: failure() && env.LICENSE_FAILED == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Only create if no open issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'license-change'
+            });
+
+            if (issues.data.length > 0) {
+              core.info('License issue already exists, skipping creation');
+              return;
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⚠️ Upstream License Change Detected — Releases Blocked',
+              body: `An upstream license has changed. All releases are **blocked** until this issue is resolved and closed.
+
+            ## Changes Detected
+
+            ${process.env.CHANGES}
+
+            ## Required Actions
+
+            1. Review the new license text for each changed dependency
+            2. Verify the license is still permissive and compatible
+            3. Update the expected hashes in \`build-release.yml\` → \`verify-licenses\` job
+            4. Close this issue — releases will resume automatically
+
+            ## Workflow Run
+
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            ---
+            🤖 This issue was automatically created by the release pipeline.
+            **All releases are blocked while this issue is open.**`,
+              labels: ['license-change', 'automated']
+            });
+
   build-glslang:
-    needs: []
+    needs: [verify-licenses]
     name: Build glslang
     strategy:
       fail-fast: true
@@ -114,7 +283,7 @@ jobs:
           path: ${{ runner.temp }}/output/glslang-${{ matrix.platform }}.*
 
   build-spirv-cross:
-    needs: []
+    needs: [verify-licenses]
     name: Build SPIRV-Cross
     strategy:
       fail-fast: true
@@ -215,7 +384,7 @@ jobs:
           path: ${{ runner.temp }}/output/spirv-cross-${{ matrix.platform }}.*
 
   build-wasm:
-    needs: []
+    needs: [verify-licenses]
     name: Build WASM artifacts (glslang + SPIRV-Cross)
     runs-on: ubuntu-latest
     steps:
@@ -342,7 +511,7 @@ jobs:
           path: ${{ runner.temp }}/output/spirv-cross-wasm.tar.gz
 
   build-dxc:
-    needs: []
+    needs: [verify-licenses]
     name: Build DXC (from source)
     strategy:
       fail-fast: true
@@ -387,7 +556,7 @@ jobs:
           path: ${{ runner.temp }}/output/dxc-${{ matrix.platform }}.*
 
   download-dxc-prebuilt:
-    needs: []
+    needs: [verify-licenses]
     name: Download DXC (Prebuilt)
     strategy:
       fail-fast: true
@@ -543,7 +712,7 @@ jobs:
             output/dxc-${{ matrix.platform }}.zip
 
   build-naga:
-    needs: []
+    needs: [verify-licenses]
     name: Build Naga
     strategy:
       fail-fast: true
@@ -611,7 +780,7 @@ jobs:
           path: ${{ runner.temp }}/output/naga-${{ matrix.platform }}.*
 
   download-wgpu-native:
-    needs: []
+    needs: [verify-licenses]
     name: Download wgpu-native (Prebuilt)
     strategy:
       fail-fast: true

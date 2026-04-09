@@ -145,18 +145,42 @@ jobs:
           - wgpu-native: ${{ steps.versions.outputs.wgpu_version }}"
           git push
 
+      - name: Build trigger reason
+        if: steps.check.outputs.needs_release == 'true'
+        id: reason
+        run: |
+          CHANGES=""
+          CURRENT_DXC=$(grep "DXC=" CURRENT_VERSIONS.txt 2>/dev/null | cut -d'=' -f2 || echo "")
+          CURRENT_GLSLANG=$(grep "GLSLANG=" CURRENT_VERSIONS.txt 2>/dev/null | cut -d'=' -f2 || echo "")
+          CURRENT_SPIRV_CROSS=$(grep "SPIRV_CROSS=" CURRENT_VERSIONS.txt 2>/dev/null | cut -d'=' -f2 || echo "")
+          CURRENT_WGPU=$(grep "WGPU=" CURRENT_VERSIONS.txt 2>/dev/null | cut -d'=' -f2 || echo "")
+
+          [ "$CURRENT_DXC" != "${{ steps.versions.outputs.dxc_version }}" ] && \
+            CHANGES="${CHANGES}DXC: ${CURRENT_DXC} → ${{ steps.versions.outputs.dxc_version }}; "
+          [ "$CURRENT_GLSLANG" != "${{ steps.versions.outputs.glslang_version }}" ] && \
+            CHANGES="${CHANGES}glslang: ${CURRENT_GLSLANG} → ${{ steps.versions.outputs.glslang_version }}; "
+          [ "$CURRENT_SPIRV_CROSS" != "${{ steps.versions.outputs.spirv_cross_version }}" ] && \
+            CHANGES="${CHANGES}SPIRV-Cross: ${CURRENT_SPIRV_CROSS} → ${{ steps.versions.outputs.spirv_cross_version }}; "
+          [ "$CURRENT_WGPU" != "${{ steps.versions.outputs.wgpu_version }}" ] && \
+            CHANGES="${CHANGES}wgpu: ${CURRENT_WGPU} → ${{ steps.versions.outputs.wgpu_version }}; "
+
+          REASON="Auto: ${CHANGES%%; }"
+          echo "reason=$REASON" >> $GITHUB_OUTPUT
+          echo "Trigger reason: $REASON"
+
       - name: Trigger release workflow
         if: steps.check.outputs.needs_release == 'true'
         uses: actions/github-script@v7
         with:
           script: |
-            // Trigger build workflow on main branch
-            // The build workflow will auto-increment version and create tag
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'build-release.yml',
-              ref: 'main'
+              ref: 'main',
+              inputs: {
+                trigger_reason: '${{ steps.reason.outputs.reason }}'
+              }
             });
 
       - name: Summary
