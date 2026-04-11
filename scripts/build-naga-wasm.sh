@@ -81,8 +81,11 @@ linker = "emcc"
 ar = "emar"
 CARGO_EOF
 
-rustup target add wasm32-unknown-emscripten
 cd "$NAGA_FFI_DIR"
+# Must add the target from HERE (not the wgpu dir) so it installs for the
+# toolchain that Cargo will actually use — wgpu pins to a specific Rust
+# version via rust-toolchain.toml, but naga-ffi uses stable.
+rustup target add wasm32-unknown-emscripten
 # Emscripten's emcc must be used as the C compiler for build scripts and native deps
 CC_wasm32_unknown_emscripten=emcc \
 CXX_wasm32_unknown_emscripten=em++ \
