@@ -96,6 +96,8 @@ echo "Configuring DXC for WebAssembly..."
 emcmake cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DLLVM_USE_HOST_TOOLS=OFF \
+    -DLLVM_ENABLE_EH=ON \
+    -DLLVM_ENABLE_RTTI=ON \
     -DENABLE_SPIRV_CODEGEN=ON \
     -DSPIRV_BUILD_TESTS=OFF \
     -DCLANG_ENABLE_ARCMT=OFF \
