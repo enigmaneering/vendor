@@ -35,10 +35,18 @@ fi
 
 cd clspv-wasm-src
 
+# Find Python — MSYS2 may only provide "python", not "python3"
+PYTHON=$(command -v python3 2>/dev/null || command -v python 2>/dev/null)
+if [ -z "$PYTHON" ]; then
+    echo "Error: Python not found (needed for utils/fetch_sources.py)"
+    exit 1
+fi
+echo "Using Python: $PYTHON"
+
 # Fetch dependencies (LLVM, Clang, SPIRV-Tools, SPIRV-Headers)
 if [ ! -d "third_party/llvm" ]; then
     echo "Fetching clspv dependencies (LLVM, SPIRV-Tools, etc.)..."
-    python3 utils/fetch_sources.py
+    $PYTHON utils/fetch_sources.py
 fi
 
 # Verify license exists (fail fast)
