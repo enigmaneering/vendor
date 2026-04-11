@@ -9,7 +9,7 @@ on:
       trigger_reason:
         description: "Why this build was triggered (auto-filled by version check)"
         required: false
-        default: "Manual dispatch"
+        default: "Alpha and Omega"
         type: string
 
 jobs:
@@ -22,8 +22,8 @@ jobs:
           echo "## Build Trigger" >> $GITHUB_STEP_SUMMARY
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             REASON="${{ inputs.trigger_reason }}"
-            if [ -z "$REASON" ] || [ "$REASON" = "Alpha and Omega" ]; then
-              echo "**Triggered by:** Alpha and Omega" >> $GITHUB_STEP_SUMMARY
+            if [ -z "$REASON" ] || [ "$REASON" = "Manual dispatch" ]; then
+              echo "**Triggered by:** Manual dispatch" >> $GITHUB_STEP_SUMMARY
             else
               echo "**Triggered by:** $REASON" >> $GITHUB_STEP_SUMMARY
             fi
