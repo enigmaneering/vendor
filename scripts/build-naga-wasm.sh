@@ -69,16 +69,23 @@ if [ ! -d "$NAGA_FFI_DIR" ]; then
     exit 1
 fi
 
-# The naga-ffi crate needs to resolve the naga dependency from the wgpu checkout
-# Override the git dependency to use our local clone
+# The naga-ffi crate needs to resolve the naga dependency from the wgpu checkout,
+# and Cargo needs to know how to use Emscripten as the compiler/linker for this target.
 mkdir -p "$NAGA_FFI_DIR/.cargo"
 cat > "$NAGA_FFI_DIR/.cargo/config.toml" << CARGO_EOF
 [patch.'https://github.com/gfx-rs/wgpu.git']
 naga = { path = "$BUILD_DIR/wgpu-wasm/naga" }
+
+[target.wasm32-unknown-emscripten]
+linker = "emcc"
+ar = "emar"
 CARGO_EOF
 
 rustup target add wasm32-unknown-emscripten
 cd "$NAGA_FFI_DIR"
+# Emscripten's emcc must be used as the C compiler for build scripts and native deps
+CC_wasm32_unknown_emscripten=emcc \
+CXX_wasm32_unknown_emscripten=em++ \
 cargo build --release --target wasm32-unknown-emscripten
 cd "$BUILD_DIR/wgpu-wasm"
 
