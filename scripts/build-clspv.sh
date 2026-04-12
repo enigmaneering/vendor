@@ -178,6 +178,7 @@ $CMAKE .. \
     $CMAKE_C_COMPILER \
     $CMAKE_CXX_COMPILER \
     -DCMAKE_BUILD_TYPE=Release \
+    -DCLSPV_SHARED_LIB=ON \
     -DCLSPV_BUILD_TESTS=OFF \
     -DCLSPV_BUILD_SPIRV_DIS=OFF \
     -DENABLE_CLSPV_OPT=OFF \
@@ -187,36 +188,55 @@ $CMAKE .. \
     -DLLVM_ENABLE_ZSTD=OFF \
     -DLLVM_ENABLE_ZLIB=OFF
 
-echo "Building clspv (this may take 20-40 minutes)..."
-$CMAKE --build . --config Release --target clspv -j$NCPU
+echo "Building clspv shared library (this may take 20-40 minutes)..."
+$CMAKE --build . --config Release --target clspv_core -j$NCPU
 
-# Package output
+# Package output — shared library + headers (no executable)
 PACKAGE_DIR="$OUTPUT_DIR/clspv-$PLATFORM"
-mkdir -p "$PACKAGE_DIR/bin"
+mkdir -p "$PACKAGE_DIR/lib"
+mkdir -p "$PACKAGE_DIR/include/clspv"
 
-echo "Packaging clspv..."
+echo "Packaging clspv shared library..."
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    cp bin/clspv.exe "$PACKAGE_DIR/bin/" 2>/dev/null || \
-        find . -name "clspv.exe" -type f -not -path "*/CMakeFiles/*" -exec cp {} "$PACKAGE_DIR/bin/" \; 2>/dev/null
+    find . -name "clspv_core.dll" -o -name "libclspv_core.dll" | head -1 | while read f; do
+        cp "$f" "$PACKAGE_DIR/lib/"
+    done
+    # Copy import library if present
+    find . -name "clspv_core.lib" -o -name "libclspv_core.dll.a" | head -1 | while read f; do
+        cp "$f" "$PACKAGE_DIR/lib/"
+    done
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    find . -name "libclspv_core.dylib" | head -1 | while read f; do
+        cp "$f" "$PACKAGE_DIR/lib/"
+    done
 else
-    cp bin/clspv "$PACKAGE_DIR/bin/" 2>/dev/null || \
-        find . -name "clspv" -type f -not -path "*/CMakeFiles/*" -exec cp {} "$PACKAGE_DIR/bin/" \; 2>/dev/null
+    find . -name "libclspv_core.so*" | while read f; do
+        cp "$f" "$PACKAGE_DIR/lib/"
+    done
 fi
 
-# Verify binary was packaged
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    if [ ! -f "$PACKAGE_DIR/bin/clspv.exe" ]; then
-        echo "Error: clspv.exe not found after build"
-        echo "Build output contents:"
-        find . -name "clspv*" -type f 2>/dev/null || echo "  (no clspv files found)"
-        exit 1
-    fi
-else
-    if [ ! -f "$PACKAGE_DIR/bin/clspv" ]; then
-        echo "Error: clspv binary not found after build"
-        echo "Build output contents:"
-        find . -name "clspv*" -type f 2>/dev/null || echo "  (no clspv files found)"
-        exit 1
+# Copy the public C API header
+cd "$BUILD_DIR/clspv"
+cp include/clspv/Compiler.h "$PACKAGE_DIR/include/clspv/"
+
+# Verify shared library was packaged
+LIB_COUNT=$(find "$PACKAGE_DIR/lib" -name "*clspv*" -type f 2>/dev/null | wc -l)
+if [ "$LIB_COUNT" -eq 0 ]; then
+    echo "Error: clspv shared library not found after build"
+    echo "Build output:"
+    find "$BUILD_DIR/clspv/build" -name "*clspv_core*" -type f 2>/dev/null || echo "  (no clspv_core files found)"
+    exit 1
+fi
+echo "Packaged:"
+ls -la "$PACKAGE_DIR/lib/"*clspv*
+echo "Headers:"
+ls -la "$PACKAGE_DIR/include/clspv/"
+
+# Fix rpath on macOS so consumers find the dylib next to the binary
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    DYLIB=$(find "$PACKAGE_DIR/lib" -name "*.dylib" | head -1)
+    if [ -n "$DYLIB" ]; then
+        install_name_tool -id @rpath/$(basename "$DYLIB") "$DYLIB" 2>/dev/null || true
     fi
 fi
 
