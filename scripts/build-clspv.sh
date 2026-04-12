@@ -22,6 +22,10 @@ elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     PLATFORM="linux-$(uname -m)"
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
     PLATFORM="windows-$(uname -m)"
+    # Ensure MSYS2 MinGW tools (cmake, ninja, python) are on PATH.
+    # The UCRT64 environment should set this, but cross-compilation steps
+    # can lose it.
+    export PATH="/ucrt64/bin:$PATH"
 fi
 
 # Normalize architecture names

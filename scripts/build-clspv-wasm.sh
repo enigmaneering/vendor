@@ -83,13 +83,23 @@ mkdir -p build
 cd build
 
 echo "Configuring clspv for WebAssembly..."
-# Note: clspv's CMakeLists.txt handles LLVM_TARGETS_TO_BUILD and libclc internally.
-# Do NOT override LLVM_TARGETS_TO_BUILD — libclc build requires a native backend.
+# On native builds, clspv internally sets LLVM_TARGETS_TO_BUILD="Native" and
+# LLVM_ENABLE_RUNTIMES="libclc" for the OpenCL C standard library.  Under
+# Emscripten, the "Native" target triggers a host-tool bootstrap (tablegen,
+# llvm-config) that fails because Emscripten can't cross-compile LLVM's
+# native target parser.
+#
+# Fix: override both cache variables from the command line (takes precedence
+# over clspv's set(... CACHE ...)) to skip libclc and the native target
+# entirely.  clspv has its own builtin implementations and works without
+# libclc.
 emcmake cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DLLVM_USE_HOST_TOOLS=OFF \
     -DLLVM_ENABLE_EH=ON \
     -DLLVM_ENABLE_RTTI=ON \
+    -DLLVM_TARGETS_TO_BUILD="" \
+    -DLLVM_ENABLE_RUNTIMES="" \
     -DCLSPV_BUILD_TESTS=OFF \
     -DCLSPV_BUILD_SPIRV_DIS=OFF \
     -DENABLE_CLSPV_OPT=OFF \
