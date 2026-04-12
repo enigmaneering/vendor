@@ -169,18 +169,16 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; t
             echo "ERROR: llvm-mingw directory not found at $LLVM_MINGW_DIR"
             exit 1
         fi
-        CMAKE_C_COMPILER="-DCMAKE_C_COMPILER=${LLVM_MINGW_ROOT_WIN}/bin/clang.exe"
-        CMAKE_CXX_COMPILER="-DCMAKE_CXX_COMPILER=${LLVM_MINGW_ROOT_WIN}/bin/clang++.exe"
+        # Use llvm-mingw's target-specific compiler wrappers instead of
+        # generic clang + --sysroot.  The wrappers are preconfigured to
+        # find libc++ headers, C headers, and libraries in the correct
+        # order — avoids the libc++ <cstddef>/<stddef.h> search path
+        # conflict that --sysroot causes with top-of-tree LLVM.
+        CMAKE_C_COMPILER="-DCMAKE_C_COMPILER=${LLVM_MINGW_ROOT_WIN}/bin/aarch64-w64-mingw32-gcc.exe"
+        CMAKE_CXX_COMPILER="-DCMAKE_CXX_COMPILER=${LLVM_MINGW_ROOT_WIN}/bin/aarch64-w64-mingw32-g++.exe"
         CMAKE_SYSTEM_PROCESSOR="-DCMAKE_SYSTEM_PROCESSOR=aarch64"
-        SYSROOT_WIN="$(cygpath -m "$LLVM_MINGW_ABS")"
-        # libc++'s wrapper headers (cstddef, cstring, etc.) must be found
-        # BEFORE the C standard library headers.  --sysroot alone doesn't
-        # guarantee this ordering with top-of-tree LLVM/libc++, so add the
-        # libc++ include path explicitly via -isystem.
-        LIBCXX_INC="${SYSROOT_WIN}/include/c++/v1"
-        export CFLAGS="--target=aarch64-w64-mingw32 --sysroot=${SYSROOT_WIN} -fcf-protection=none"
-        export CXXFLAGS="--target=aarch64-w64-mingw32 --sysroot=${SYSROOT_WIN} -isystem ${LIBCXX_INC} -fcf-protection=none"
-        export LDFLAGS="--sysroot=${SYSROOT_WIN}"
+        export CFLAGS="-fcf-protection=none"
+        export CXXFLAGS="-fcf-protection=none"
     fi
 fi
 
