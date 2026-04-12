@@ -183,7 +183,9 @@ $CMAKE .. \
     -DENABLE_CLSPV_OPT=OFF \
     -DLLVM_INCLUDE_TESTS=OFF \
     -DLLVM_INCLUDE_EXAMPLES=OFF \
-    -DLLVM_INCLUDE_BENCHMARKS=OFF
+    -DLLVM_INCLUDE_BENCHMARKS=OFF \
+    -DLLVM_ENABLE_ZSTD=OFF \
+    -DLLVM_ENABLE_ZLIB=OFF
 
 echo "Building clspv (this may take 20-40 minutes)..."
 $CMAKE --build . --config Release --target clspv -j$NCPU
