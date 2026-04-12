@@ -31,12 +31,8 @@ fi
 # Normalize architecture names
 PLATFORM=$(echo "$PLATFORM" | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
 
-# Handle Windows ARM64 cross-compilation
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    if [ -n "$CROSS_COMPILE_TARGET" ] && [ "$CROSS_COMPILE_TARGET" = "aarch64" ]; then
-        PLATFORM="windows-arm64"
-    fi
-fi
+# Windows ARM64 builds run natively on windows-11-arm runners,
+# so uname -m reports the correct architecture directly.
 
 echo "Building clspv for $PLATFORM..."
 
@@ -158,28 +154,8 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; t
     CMAKE_GENERATOR="-G Ninja"
     echo "Using MinGW with Ninja generator"
 
-    # Cross-compilation for ARM64 using llvm-mingw
-    if [ -n "$CROSS_COMPILE_TARGET" ] && [ "$CROSS_COMPILE_TARGET" = "aarch64" ]; then
-        echo "Cross-compiling to ARM64 using llvm-mingw"
-        LLVM_MINGW_DIR="$SCRIPT_DIR/../llvm-mingw-20260311-ucrt-x86_64"
-        if [ -d "$LLVM_MINGW_DIR" ]; then
-            LLVM_MINGW_ABS="$(cd "$LLVM_MINGW_DIR" && pwd)"
-            LLVM_MINGW_ROOT_WIN="$(cygpath -w "$LLVM_MINGW_ABS" 2>/dev/null || echo "$LLVM_MINGW_ABS")"
-        else
-            echo "ERROR: llvm-mingw directory not found at $LLVM_MINGW_DIR"
-            exit 1
-        fi
-        # Use llvm-mingw's target-specific compiler wrappers instead of
-        # generic clang + --sysroot.  The wrappers are preconfigured to
-        # find libc++ headers, C headers, and libraries in the correct
-        # order — avoids the libc++ <cstddef>/<stddef.h> search path
-        # conflict that --sysroot causes with top-of-tree LLVM.
-        CMAKE_C_COMPILER="-DCMAKE_C_COMPILER=${LLVM_MINGW_ROOT_WIN}/bin/aarch64-w64-mingw32-gcc.exe"
-        CMAKE_CXX_COMPILER="-DCMAKE_CXX_COMPILER=${LLVM_MINGW_ROOT_WIN}/bin/aarch64-w64-mingw32-g++.exe"
-        CMAKE_SYSTEM_PROCESSOR="-DCMAKE_SYSTEM_PROCESSOR=aarch64"
-        export CFLAGS="-fcf-protection=none"
-        export CXXFLAGS="-fcf-protection=none"
-    fi
+    # No cross-compilation needed — Windows ARM64 builds run natively
+    # on windows-11-arm runners.
 fi
 
 # Linux cross-compilation for ARM64
