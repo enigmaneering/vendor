@@ -114,10 +114,12 @@ fi
 # Build the CLI tool (naga-cli package produces naga binary)
 cargo build --release --package naga-cli $CARGO_TARGET_FLAG
 
-# Build the FFI shared library (naga-ffi crate produces libnaga_ffi.so/.dylib)
+# Build the FFI shared library (naga-ffi crate as cdylib → libnaga_ffi.so/.dylib)
+# Cargo.toml has crate-type=["staticlib"] for WASM compatibility;
+# we use cargo rustc --crate-type=cdylib to produce the shared library for native.
 echo "Building Naga FFI shared library..."
 FFI_DIR="$SCRIPT_DIR/../naga-ffi"
-cargo build --release --manifest-path "$FFI_DIR/Cargo.toml" $CARGO_TARGET_FLAG
+cargo rustc --release --manifest-path "$FFI_DIR/Cargo.toml" --crate-type=cdylib $CARGO_TARGET_FLAG
 
 # Determine binary location
 if [ -n "$CARGO_TARGET" ]; then
