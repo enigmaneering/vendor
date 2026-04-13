@@ -85,6 +85,8 @@ jobs:
           git clone --depth 1 https://github.com/microsoft/DirectXShaderCompiler.git dxc
           git clone --depth 1 https://github.com/gfx-rs/wgpu-native.git wgpu-native
           git clone --depth 1 https://github.com/google/clspv.git clspv
+          git clone --depth 1 --branch llvmorg-20.1.5 https://github.com/llvm/llvm-project.git llvm-project
+          git clone --depth 1 https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git spirv-llvm-translator
 
           # Expected hashes — update when licenses are reviewed and approved
           EXPECTED_GLSLANG="17e70c676e1521ff3e4686f04a2053d93a7e28a33be8de7ec37ab0ff72feb677"
@@ -96,6 +98,8 @@ jobs:
           EXPECTED_WGPU_MIT="c7fea58d1cfe49634cd92e54fc10a9d871f4b275321a4cd8c09e449122caaeb4"
           EXPECTED_WGPU_APACHE="a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9"
           EXPECTED_CLSPV="2050d82ea19614989deac39163c471b6e753659dfd4e4e88c6f724624db59f32"
+          EXPECTED_LLVM="8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee"
+          EXPECTED_SPIRV_TRANSLATOR="e3bc36440fc927c62d5cc24efeefe225a14d4e34ffeb0c92e430625cce9ee444"
 
           FAILED=0
           CHANGES=""
@@ -121,6 +125,8 @@ jobs:
           check "wgpu-native MIT" wgpu-native/LICENSE.MIT "$EXPECTED_WGPU_MIT"
           check "wgpu-native Apache" wgpu-native/LICENSE.APACHE "$EXPECTED_WGPU_APACHE"
           check "clspv" clspv/LICENSE "$EXPECTED_CLSPV"
+          check "LLVM" llvm-project/llvm/LICENSE.TXT "$EXPECTED_LLVM"
+          check "SPIRV-LLVM-Translator" spirv-llvm-translator/LICENSE.TXT "$EXPECTED_SPIRV_TRANSLATOR"
 
           echo "CHANGES<<EOF" >> $GITHUB_ENV
           echo -e "$CHANGES" >> $GITHUB_ENV
@@ -843,6 +849,50 @@ jobs:
           name: clspv-wasm
           path: ${{ runner.temp }}/output/clspv-wasm.*
 
+  build-mental-llvm:
+    needs: [verify-licenses]
+    name: Build libmental-llvm
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: macos-14
+            platform: darwin-arm64
+            macos_arch: arm64
+          - runner: macos-14
+            platform: darwin-amd64
+            macos_arch: x86_64
+          - runner: ubuntu-latest
+            platform: linux-amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux ARM64)
+        if: matrix.platform == 'linux-arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-11 g++-11
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
+
+      - name: Build libmental-llvm
+        shell: bash
+        run: |
+          chmod +x scripts/build-llvm.sh
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
+          MACOS_ARCH="${{ matrix.macos_arch || '' }}" \
+          bash scripts/build-llvm.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mental-llvm-${{ matrix.platform }}
+          path: ${{ runner.temp }}/output/mental-llvm-${{ matrix.platform }}.*
+
   build-naga:
     needs: [verify-licenses]
     name: Build Naga
@@ -1039,7 +1089,7 @@ jobs:
 
   determine-version:
     name: Determine Version
-    needs: [build-glslang, build-spirv-cross, build-wasm, build-dxc-wasm, build-dxc, download-dxc-prebuilt, build-clspv, build-clspv-wasm, build-naga, build-naga-wasm, download-wgpu-native]
+    needs: [build-glslang, build-spirv-cross, build-wasm, build-dxc-wasm, build-dxc, download-dxc-prebuilt, build-clspv, build-clspv-wasm, build-naga, build-naga-wasm, download-wgpu-native, build-mental-llvm]
     runs-on: ubuntu-latest
     permissions:
       contents: write  # Need write permission to create and push tags
@@ -1106,7 +1156,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: '{glslang,spirv-cross,dxc,naga,wgpu,clspv}-*'
+          pattern: '{glslang,spirv-cross,dxc,naga,wgpu,clspv,mental-llvm}-*'
 
       - name: Display artifact structure
         run: ls -R artifacts
@@ -1161,6 +1211,7 @@ jobs:
             | **DXC** | DirectX Shader Compiler | HLSL → SPIRV/DXIL, WGSL support |
             | **Naga** | Rust-based WebGPU shader compiler | WGSL/GLSL/SPIRV ↔ SPIRV/WGSL/MSL/HLSL/GLSL |
             | **clspv** | OpenCL C to Vulkan SPIR-V compiler | OpenCL C → SPIR-V for cross-backend compute |
+            | **libmental-llvm** | LLVM translation layer | CUDA → PTX, OpenCL C → SPIR-V, SPIR-V ↔ LLVM IR bridge |
             | **wgpu-native** | Cross-platform WebGPU implementation | GPU compute via Metal/Vulkan/D3D12/OpenGL |
 
             ## 💻 Supported Platforms

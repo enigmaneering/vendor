@@ -11,6 +11,7 @@ Pre-built shader compilation and GPU compute toolchain for The Enigmaneering Gui
 | **[DXC](https://github.com/microsoft/DirectXShaderCompiler)** | HLSL to SPIR-V                             | Microsoft |
 | **[Naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga)** | WGSL to/from SPIR-V                        | gfx-rs |
 | **[clspv](https://github.com/google/clspv)** | OpenCL C to Vulkan SPIR-V (shared library) | Google |
+| **[libmental-llvm](mental-llvm/)** | LLVM translation layer (CUDA→PTX, SPIR-V↔LLVM IR) | Enigmaneering (wraps LLVM/Clang) |
 | **[wgpu-native](https://github.com/gfx-rs/wgpu-native)** | WebGPU runtime (Metal/Vulkan/D3D12/OpenGL) | gfx-rs |
 
 ## Platforms
