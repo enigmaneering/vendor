@@ -162,10 +162,15 @@ cd build
 echo "Configuring clspv for WebAssembly..."
 # Prefix the llvm and clang namespaces so clspv's LLVM internals don't
 # collide with DXC's copy of LLVM when both are statically linked into
-# the same WASM binary.  This only affects C++ namespace tokens —
-# #include paths and single-token identifiers (llvm_unreachable, etc.)
-# are NOT affected by preprocessor macro replacement.
+# the same WASM binary.  The -Dllvm/-Dclang flags rename C++ namespace
+# tokens.  The individual -DLLVM* flags rename the handful of LLVM C API
+# functions (extern "C") that can't be caught by namespace renaming.
 CLSPV_NS_FLAGS="-Dllvm=clspv_llvm -Dclang=clspv_clang"
+CLSPV_NS_FLAGS="$CLSPV_NS_FLAGS -DLLVMCloneModule=clspv_LLVMCloneModule"
+CLSPV_NS_FLAGS="$CLSPV_NS_FLAGS -DLLVMInstallFatalErrorHandler=clspv_LLVMInstallFatalErrorHandler"
+CLSPV_NS_FLAGS="$CLSPV_NS_FLAGS -DLLVMResetFatalErrorHandler=clspv_LLVMResetFatalErrorHandler"
+CLSPV_NS_FLAGS="$CLSPV_NS_FLAGS -DLLVMEnablePrettyStackTrace=clspv_LLVMEnablePrettyStackTrace"
+CLSPV_NS_FLAGS="$CLSPV_NS_FLAGS -DLLVMParseCommandLineOptions=clspv_LLVMParseCommandLineOptions"
 emcmake cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_C_FLAGS="$CLSPV_NS_FLAGS" \
