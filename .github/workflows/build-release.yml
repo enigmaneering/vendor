@@ -509,7 +509,7 @@ jobs:
 
   build-mlvm:
     needs: [verify-licenses]
-    name: Build libmental-mlvm
+    name: "Build libmental-mlvm (${{ matrix.platform }})"
     strategy:
       fail-fast: true
       matrix:
@@ -524,6 +524,15 @@ jobs:
             platform: linux-amd64
           - runner: ubuntu-24.04-arm
             platform: linux-arm64
+          - runner: windows-latest
+            platform: windows-amd64
+            mingw_arch: x86_64
+          - runner: windows-11-arm
+            platform: windows-arm64
+            mingw_arch: x86_64
+          - runner: ubuntu-latest
+            platform: wasm
+            wasm: true
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -536,13 +545,44 @@ jobs:
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
 
-      - name: Build libmental-mlvm
+      - name: Install MinGW (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: >-
+            mingw-w64-${{ matrix.mingw_arch }}-cmake
+            mingw-w64-${{ matrix.mingw_arch }}-ninja
+            mingw-w64-${{ matrix.mingw_arch }}-python
+            mingw-w64-${{ matrix.mingw_arch }}-clang
+            mingw-w64-${{ matrix.mingw_arch }}-lld
+            git
+            make
+
+      - name: Install Emscripten (WASM)
+        if: matrix.wasm
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: "5.0.1"
+
+      - name: Build libmental-mlvm (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           chmod +x scripts/build-mlvm.sh
           BUILD_DIR="${{ runner.temp }}/build" \
           OUTPUT_DIR="${{ runner.temp }}/output" \
           MACOS_ARCH="${{ matrix.macos_arch || '' }}" \
+          WASM_BUILD="${{ matrix.wasm && '1' || '0' }}" \
+          bash scripts/build-mlvm.sh
+
+      - name: Build libmental-mlvm (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          chmod +x scripts/build-mlvm.sh
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
           bash scripts/build-mlvm.sh
 
       - name: Upload artifact
@@ -551,60 +591,31 @@ jobs:
           name: mental-mlvm-${{ matrix.platform }}
           path: ${{ runner.temp }}/output/mental-mlvm-${{ matrix.platform }}.*
 
-  build-mlvm-wasm:
-    needs: [verify-licenses]
-    name: Build libmental-mlvm (WASM)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: "5.0.1"
-
-      - name: Build libmental-mlvm for WASM
-        run: |
-          chmod +x scripts/build-mlvm.sh
-          BUILD_DIR="${{ runner.temp }}/build" \
-          OUTPUT_DIR="${{ runner.temp }}/output" \
-          WASM_BUILD=1 \
-          bash scripts/build-mlvm.sh
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: mental-mlvm-wasm
-          path: ${{ runner.temp }}/output/mental-mlvm-wasm.*
-
   build-naga:
     needs: [verify-licenses]
-    name: Build Naga
+    name: "Build Naga (${{ matrix.platform }})"
     strategy:
       fail-fast: true
       matrix:
         include:
-          - os: macos-latest
-            runner: macos-14  # ARM64
+          - runner: macos-14
             platform: darwin-arm64
             macos_arch: arm64
-          - os: macos-latest
-            runner: macos-14  # Cross-compile x86_64 on ARM64
+          - runner: macos-14
             platform: darwin-amd64
             macos_arch: x86_64
-          - os: ubuntu-latest
-            runner: ubuntu-latest
+          - runner: ubuntu-latest
             platform: linux-amd64
-          - os: ubuntu-latest
-            runner: ubuntu-24.04-arm
+          - runner: ubuntu-24.04-arm
             platform: linux-arm64
-          - os: windows-latest
-            runner: windows-latest
+          - runner: windows-latest
             platform: windows-amd64
-          - os: windows-latest
-            runner: windows-latest
+          - runner: windows-latest
             platform: windows-arm64
             cross_compile_target: aarch64
+          - runner: ubuntu-latest
+            platform: wasm
+            wasm: true
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -618,6 +629,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
+      - name: Install Emscripten (WASM)
+        if: matrix.wasm
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: "5.0.1"
+
+      - name: Build Naga (WASM)
+        if: matrix.wasm
+        run: |
+          chmod +x scripts/build-naga-wasm.sh
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
+          bash scripts/build-naga-wasm.sh
+
       - name: Build Naga (Windows)
         if: runner.os == 'Windows'
         shell: bash
@@ -629,7 +654,7 @@ jobs:
           bash scripts/build-naga.sh
 
       - name: Build Naga (macOS/Linux)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && !matrix.wasm
         shell: bash
         run: |
           chmod +x scripts/build-naga.sh
@@ -644,34 +669,6 @@ jobs:
         with:
           name: naga-${{ matrix.platform }}
           path: ${{ runner.temp }}/output/naga-${{ matrix.platform }}.*
-
-  build-naga-wasm:
-    needs: [verify-licenses]
-    name: Build Naga (WASM)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: "5.0.1"
-
-      - name: Build Naga for WASM
-        run: |
-          chmod +x scripts/build-naga-wasm.sh
-          BUILD_DIR="${{ runner.temp }}/build" \
-          OUTPUT_DIR="${{ runner.temp }}/output" \
-          bash scripts/build-naga-wasm.sh
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: naga-wasm
-          path: ${{ runner.temp }}/output/naga-wasm.*
 
   download-wgpu-native:
     needs: [verify-licenses]
@@ -773,7 +770,7 @@ jobs:
 
   determine-version:
     name: Determine Version
-    needs: [build-glslang, build-spirv-cross, build-wasm, build-mlvm, build-mlvm-wasm, build-naga, build-naga-wasm, download-wgpu-native]
+    needs: [build-glslang, build-spirv-cross, build-wasm, build-mlvm, build-naga, download-wgpu-native]
     runs-on: ubuntu-latest
     permissions:
       contents: write  # Need write permission to create and push tags
