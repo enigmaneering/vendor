@@ -544,8 +544,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache llvm-mlvm build
+        id: cache-llvm
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/output/llvm-mlvm-${{ matrix.platform }}.*
+          key: llvm-mlvm-${{ matrix.platform }}-${{ hashFiles('scripts/build-llvm-mlvm.sh', 'scripts/common.sh') }}
+
       - name: Install dependencies (Linux ARM64)
-        if: matrix.platform == 'linux-arm64'
+        if: steps.cache-llvm.outputs.cache-hit != 'true' && matrix.platform == 'linux-arm64'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-11 g++-11
@@ -553,7 +560,7 @@ jobs:
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
 
       - name: Install MinGW (Windows)
-        if: runner.os == 'Windows'
+        if: steps.cache-llvm.outputs.cache-hit != 'true' && runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -567,13 +574,13 @@ jobs:
             make
 
       - name: Install Emscripten (WASM)
-        if: matrix.wasm
+        if: steps.cache-llvm.outputs.cache-hit != 'true' && matrix.wasm
         uses: mymindstorm/setup-emsdk@v14
         with:
           version: "5.0.1"
 
       - name: Build llvm-mlvm (Unix)
-        if: runner.os != 'Windows'
+        if: steps.cache-llvm.outputs.cache-hit != 'true' && runner.os != 'Windows'
         shell: bash
         run: |
           chmod +x scripts/build-llvm-mlvm.sh
@@ -584,7 +591,7 @@ jobs:
           bash scripts/build-llvm-mlvm.sh
 
       - name: Build llvm-mlvm (Windows)
-        if: runner.os == 'Windows'
+        if: steps.cache-llvm.outputs.cache-hit != 'true' && runner.os == 'Windows'
         shell: msys2 {0}
         run: |
           chmod +x scripts/build-llvm-mlvm.sh
