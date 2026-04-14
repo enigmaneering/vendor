@@ -98,35 +98,18 @@ $CMAKE_CMD ../llvm \
 echo "Building LLVM (this may take 30-60 minutes)..."
 $MAKE_CMD --build . --config Release -j$NCPU
 
-LLVM_BUILD_DIR="$(pwd)"
-
-# Package
+# Install to package directory — this generates relocatable CMake config
 PACKAGE_DIR="$OUTPUT_DIR/llvm-mlvm-$PLATFORM"
-mkdir -p "$PACKAGE_DIR/lib" "$PACKAGE_DIR/include"
+echo "Installing to $PACKAGE_DIR..."
+$MAKE_CMD --build . --target install -- DESTDIR= CMAKE_INSTALL_PREFIX="$PACKAGE_DIR" 2>/dev/null || \
+    cmake --install . --prefix "$PACKAGE_DIR"
 
-echo "Packaging llvm-mlvm..."
-if [ "$IS_WASM" -eq 1 ]; then
-    # Static libraries for WASM
-    find lib -name "*.a" | while read f; do cp "$f" "$PACKAGE_DIR/lib/"; done
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    find lib -name "libLLVM*.dylib" -o -name "libclang*.dylib" | while read f; do cp "$f" "$PACKAGE_DIR/lib/"; done
-    for d in "$PACKAGE_DIR/lib/"*.dylib; do
+# Fix rpaths on macOS
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    find "$PACKAGE_DIR/lib" -name "*.dylib" | while read d; do
         install_name_tool -id "@rpath/$(basename "$d")" "$d" 2>/dev/null || true
     done
-else
-    find lib -name "libLLVM*.so*" -o -name "libclang*.so*" | while read f; do cp -P "$f" "$PACKAGE_DIR/lib/"; done
 fi
-
-# Headers (needed by downstream builds)
-cp -r ../llvm/include/llvm "$PACKAGE_DIR/include/"
-cp -r include/llvm/* "$PACKAGE_DIR/include/llvm/" 2>/dev/null || true
-cp -r ../clang/include/clang "$PACKAGE_DIR/include/"
-cp -r tools/clang/include/clang/* "$PACKAGE_DIR/include/clang/" 2>/dev/null || true
-
-# CMake config (needed by downstream builds)
-mkdir -p "$PACKAGE_DIR/lib/cmake"
-cp -r lib/cmake/llvm "$PACKAGE_DIR/lib/cmake/" 2>/dev/null || true
-cp -r lib/cmake/clang "$PACKAGE_DIR/lib/cmake/" 2>/dev/null || true
 
 # License
 mkdir -p "$PACKAGE_DIR/LICENSES"
