@@ -1,16 +1,20 @@
 # Redistributables
 
-Pre-built shader compilation and GPU compute toolchain for [libmental](https://git.enigmaneering.org/enigmaneering/mental). All tools are built from source across 6 native platforms + WebAssembly.
+Pre-built shader compilation and GPU compute toolchain for [libmental](https://git.enigmaneering.org/enigmaneering/mental). All tools are built from source across 7 targets (6 native + WebAssembly).
 
 ## Tools
 
 | Tool | Purpose | Source |
 |------|---------|--------|
-| **[glslang](https://github.com/KhronosGroup/glslang)** | GLSL/ESSL to SPIR-V (includes SPIRV-Tools) | Khronos |
-| **[SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross)** | SPIR-V to GLSL/HLSL/MSL | Khronos |
-| **[Naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga)** | WGSL to/from SPIR-V (shared library via FFI) | gfx-rs |
-| **[libmental-mlvm](mental-mlvm/)** | MLVM translation layer — HLSL/CUDA/OpenCL C compilation, SPIR-V↔LLVM IR bridge, PTX/AMDGPU codegen | LLVM/Clang/clspv/SPIRV-LLVM-Translator |
-| **[wgpu-native](https://github.com/gfx-rs/wgpu-native)** | WebGPU runtime (Metal/Vulkan/D3D12/OpenGL) | gfx-rs |
+| **glslang** | GLSL/ESSL to SPIR-V (includes SPIRV-Tools) | [Khronos](https://github.com/KhronosGroup/glslang) |
+| **SPIRV-Cross** | SPIR-V to GLSL/HLSL/MSL | [Khronos](https://github.com/KhronosGroup/SPIRV-Cross) |
+| **Naga** | WGSL to/from SPIR-V (shared library via FFI) | [gfx-rs](https://github.com/gfx-rs/wgpu) |
+| **wgpu-native** | WebGPU runtime (Metal/Vulkan/D3D12/OpenGL) | [gfx-rs](https://github.com/gfx-rs/wgpu-native) |
+| **llvm-mlvm** | Namespaced LLVM + Clang (NVPTX, AMDGPU backends) | [LLVM](https://github.com/llvm/llvm-project) |
+| **clspv-mlvm** | OpenCL C to Vulkan SPIR-V (against llvm-mlvm) | [Google](https://github.com/google/clspv) |
+| **spirv-llvm-translator-mlvm** | SPIR-V ↔ LLVM IR bridge (against llvm-mlvm) | [Khronos](https://github.com/KhronosGroup/SPIRV-LLVM-Translator) |
+
+The `-mlvm` suffix indicates the tool was built with namespace isolation (`-Dllvm=mlvm -Dclang=mlang`) to prevent symbol collisions. Non-suffixed tools are faithful upstream builds.
 
 ## Platforms
 
@@ -18,8 +22,8 @@ All tools are provided for:
 - macOS ARM64 / x86_64
 - Linux x86_64 / ARM64
 - Windows x86_64 / ARM64
-- WebAssembly (glslang, SPIRV-Cross, Naga, libmental-mlvm)
+- WebAssembly
 
 ## License
 
-All components are Apache 2.0 or dual MIT/Apache 2.0. Licenses are verified on every build and packaged alongside each artifact. No binaries are stored in this repository — only build scripts and CI configuration.
+All components are Apache 2.0 or dual MIT/Apache 2.0. Licenses are verified on every build and packaged alongside each artifact.
