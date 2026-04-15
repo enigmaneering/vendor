@@ -18,7 +18,13 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     PLATFORM="linux-$(uname -m)"
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    PLATFORM="windows-$(uname -m)"
+    # MSYS2 uname -m reports x86_64 even on ARM64 (runs under emulation).
+    # Use PROCESSOR_ARCHITECTURE to detect the real hardware.
+    if [ "${PROCESSOR_ARCHITECTURE}" = "ARM64" ] || [ "${PROCESSOR_ARCHITEW6432}" = "ARM64" ]; then
+        PLATFORM="windows-aarch64"
+    else
+        PLATFORM="windows-$(uname -m)"
+    fi
     export PATH="/mingw64/bin:/ucrt64/bin:$PATH"
 fi
 PLATFORM=$(echo "$PLATFORM" | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
