@@ -588,7 +588,7 @@ jobs:
           OUTPUT_DIR="${{ runner.temp }}/output" \
           MACOS_ARCH="${{ matrix.macos_arch || '' }}" \
           WASM_BUILD="${{ matrix.wasm && '1' || '0' }}" \
-          bash scripts/build-llvm.sh
+          MENTAL_PLATFORM="${{ matrix.platform }}" bash scripts/build-llvm.sh
 
       - name: Build LLVM (Windows)
         if: steps.cache-llvm.outputs.cache-hit != 'true' && runner.os == 'Windows'
@@ -597,7 +597,7 @@ jobs:
           chmod +x scripts/build-llvm.sh
           BUILD_DIR="${{ runner.temp }}/build" \
           OUTPUT_DIR="${{ runner.temp }}/output" \
-          bash scripts/build-llvm.sh
+          MENTAL_PLATFORM="${{ matrix.platform }}" bash scripts/build-llvm.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -660,7 +660,7 @@ jobs:
           OUTPUT_DIR="${{ runner.temp }}/output" \
           LLVM_BUILD_DIR="$(pwd)/llvm-${{ matrix.platform }}" \
           WASM_BUILD="${{ matrix.wasm && '1' || '0' }}" \
-          bash scripts/build-clspv.sh
+          MENTAL_PLATFORM="${{ matrix.platform }}" bash scripts/build-clspv.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -717,7 +717,7 @@ jobs:
           OUTPUT_DIR="${{ runner.temp }}/output" \
           LLVM_BUILD_DIR="$(pwd)/llvm-${{ matrix.platform }}" \
           WASM_BUILD="${{ matrix.wasm && '1' || '0' }}" \
-          bash scripts/build-spirv-llvm-translator.sh
+          MENTAL_PLATFORM="${{ matrix.platform }}" bash scripts/build-spirv-llvm-translator.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

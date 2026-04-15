@@ -6,30 +6,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
 BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/../build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/../output}"
 
-# Platform detection
+# Platform detection — prefer MENTAL_PLATFORM env var if set by CI,
+# since MSYS2 on Windows ARM64 misreports architecture as x86_64.
 IS_WASM=0
-if command -v emcmake &> /dev/null && [ "${WASM_BUILD:-0}" = "1" ]; then
+if [ -n "$MENTAL_PLATFORM" ]; then
+    PLATFORM="$MENTAL_PLATFORM"
+    if [ "$PLATFORM" = "wasm" ]; then IS_WASM=1; fi
+elif command -v emcmake &> /dev/null && [ "${WASM_BUILD:-0}" = "1" ]; then
     IS_WASM=1
     PLATFORM="wasm"
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     ARCH=$(uname -m)
     if [ -n "$MACOS_ARCH" ]; then ARCH="$MACOS_ARCH"; fi
     PLATFORM="darwin-$ARCH"
+    PLATFORM=$(echo "$PLATFORM" | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     PLATFORM="linux-$(uname -m)"
+    PLATFORM=$(echo "$PLATFORM" | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    # Detect real architecture — MSYS2 uname -m reports x86_64 even on
-    # ARM64 (runs under emulation).  Try multiple detection methods.
-    WIN_ARCH=$(uname -m)
-    if [ "${PROCESSOR_ARCHITECTURE}" = "ARM64" ] || \
-       [ "${PROCESSOR_ARCHITEW6432}" = "ARM64" ] || \
-       [ "$(cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%" 2>/dev/null | tr -d '\r')" = "ARM64" ]; then
-        WIN_ARCH="aarch64"
-    fi
-    PLATFORM="windows-$WIN_ARCH"
+    PLATFORM="windows-$(uname -m)"
+    PLATFORM=$(echo "$PLATFORM" | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
     export PATH="/mingw64/bin:/ucrt64/bin:$PATH"
 fi
-PLATFORM=$(echo "$PLATFORM" | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
 
 # Parallelism
 if [[ "$OSTYPE" == "darwin"* ]]; then
