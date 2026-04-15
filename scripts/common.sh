@@ -18,13 +18,15 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     PLATFORM="linux-$(uname -m)"
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    # MSYS2 uname -m reports x86_64 even on ARM64 (runs under emulation).
-    # Use PROCESSOR_ARCHITECTURE to detect the real hardware.
-    if [ "${PROCESSOR_ARCHITECTURE}" = "ARM64" ] || [ "${PROCESSOR_ARCHITEW6432}" = "ARM64" ]; then
-        PLATFORM="windows-aarch64"
-    else
-        PLATFORM="windows-$(uname -m)"
+    # Detect real architecture — MSYS2 uname -m reports x86_64 even on
+    # ARM64 (runs under emulation).  Try multiple detection methods.
+    WIN_ARCH=$(uname -m)
+    if [ "${PROCESSOR_ARCHITECTURE}" = "ARM64" ] || \
+       [ "${PROCESSOR_ARCHITEW6432}" = "ARM64" ] || \
+       [ "$(cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%" 2>/dev/null | tr -d '\r')" = "ARM64" ]; then
+        WIN_ARCH="aarch64"
     fi
+    PLATFORM="windows-$WIN_ARCH"
     export PATH="/mingw64/bin:/ucrt64/bin:$PATH"
 fi
 PLATFORM=$(echo "$PLATFORM" | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
@@ -65,5 +67,3 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; t
     CMAKE_GENERATOR="-G Ninja"
 fi
 
-# Namespace flags — all LLVM-based builds use these
-NS_FLAGS="-Dllvm=mlvm -Dclang=mlang"

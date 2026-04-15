@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Build LLVM + Clang with mlvm namespace (-Dllvm=mlvm -Dclang=mlang).
+# Build LLVM + Clang for the MLVM toolchain.
 # Produces shared libraries (native) or static libraries (WASM).
 # All other mlvm-suffixed tools build against this.
 
@@ -34,8 +34,6 @@ if [ "$IS_WASM" -eq 1 ]; then
 
     $CMAKE ../llvm \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_C_FLAGS="$NS_FLAGS" \
-        -DCMAKE_CXX_FLAGS="$NS_FLAGS" \
         -DLLVM_ENABLE_PROJECTS="clang" \
         -DLLVM_TARGETS_TO_BUILD="X86" \
         -DLLVM_INCLUDE_TESTS=OFF \
@@ -78,8 +76,6 @@ $CMAKE_CMD ../llvm \
     $CMAKE_OSX_ARCH_FLAG \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-    -DCMAKE_C_FLAGS="$NS_FLAGS" \
-    -DCMAKE_CXX_FLAGS="$NS_FLAGS" \
     $WASM_FLAGS \
     -DLLVM_ENABLE_PROJECTS="clang" \
     -DLLVM_TARGETS_TO_BUILD="$LLVM_TARGETS" \
@@ -95,7 +91,7 @@ $CMAKE_CMD ../llvm \
     -DCLANG_INCLUDE_TESTS=OFF \
     -DCLANG_INCLUDE_DOCS=OFF
 
-echo "Building LLVM (this may take 30-60 minutes)..."
+echo "Building LLVM (this may take a while)..."
 $MAKE_CMD --build . --config Release -j$NCPU
 
 # Install to package directory — this generates relocatable CMake config

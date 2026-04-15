@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Build SPIRV-LLVM-Translator against llvm-mlvm (namespaced LLVM).
+# Build SPIRV-LLVM-Translator against llvm-mlvm.
 # Bridges SPIR-V ↔ LLVM IR.
 # Requires: llvm-mlvm artifact (set LLVM_MLVM_DIR)
 
@@ -45,8 +45,6 @@ $CMAKE_CMD .. \
     $CMAKE_GENERATOR \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-    -DCMAKE_C_FLAGS="$NS_FLAGS" \
-    -DCMAKE_CXX_FLAGS="$NS_FLAGS" \
     -DLLVM_DIR="$LLVM_MLVM/lib/cmake/llvm" \
     -DBUILD_SHARED_LIBS=$SHARED \
     -DLLVM_INCLUDE_TESTS=OFF

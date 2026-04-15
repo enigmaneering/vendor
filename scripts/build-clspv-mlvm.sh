@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Build clspv against llvm-mlvm (namespaced LLVM).
+# Build clspv against llvm-mlvm.
 # Produces a shared library (native) or static library (WASM).
 # Requires: llvm-mlvm artifact (set LLVM_MLVM_DIR)
 
@@ -60,8 +60,6 @@ $CMAKE_CMD .. \
     $CMAKE_GENERATOR \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-    -DCMAKE_C_FLAGS="$NS_FLAGS" \
-    -DCMAKE_CXX_FLAGS="$NS_FLAGS" \
     -DCLSPV_LLVM_SOURCE_DIR="$BUILD_DIR/llvm-project/llvm" \
     -DCLSPV_CLANG_SOURCE_DIR="$BUILD_DIR/llvm-project/clang" \
     -DCLSPV_LLVM_BINARY_DIR="$LLVM_MLVM" \

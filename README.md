@@ -10,11 +10,11 @@ Pre-built shader compilation and GPU compute toolchain for [libmental](https://g
 | **SPIRV-Cross** | SPIR-V to GLSL/HLSL/MSL | [Khronos](https://github.com/KhronosGroup/SPIRV-Cross) |
 | **Naga** | WGSL to/from SPIR-V (shared library via FFI) | [gfx-rs](https://github.com/gfx-rs/wgpu) |
 | **wgpu-native** | WebGPU runtime (Metal/Vulkan/D3D12/OpenGL) | [gfx-rs](https://github.com/gfx-rs/wgpu-native) |
-| **llvm-mlvm** | Namespaced LLVM + Clang (NVPTX, AMDGPU backends) | [LLVM](https://github.com/llvm/llvm-project) |
-| **clspv-mlvm** | OpenCL C to Vulkan SPIR-V (against llvm-mlvm) | [Google](https://github.com/google/clspv) |
-| **spirv-llvm-translator-mlvm** | SPIR-V ↔ LLVM IR bridge (against llvm-mlvm) | [Khronos](https://github.com/KhronosGroup/SPIRV-LLVM-Translator) |
+| **llvm-mlvm** | LLVM + Clang (NVPTX, AMDGPU backends) | [LLVM](https://github.com/llvm/llvm-project) |
+| **clspv-mlvm** | OpenCL C to Vulkan SPIR-V (built against llvm-mlvm) | [Google](https://github.com/google/clspv) |
+| **spirv-llvm-translator-mlvm** | SPIR-V ↔ LLVM IR bridge (built against llvm-mlvm) | [Khronos](https://github.com/KhronosGroup/SPIRV-LLVM-Translator) |
 
-The `-mlvm` suffix indicates the tool was built with namespace isolation (`-Dllvm=mlvm -Dclang=mlang`) to prevent symbol collisions. Non-suffixed tools are faithful upstream builds.
+The `-mlvm` suffix indicates tools built as part of the MLVM toolchain against a shared LLVM.
 
 ## Platforms
 
