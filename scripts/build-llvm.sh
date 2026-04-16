@@ -101,17 +101,12 @@ PACKAGE_DIR="$OUTPUT_DIR/llvm-$PLATFORM"
 mkdir -p "$PACKAGE_DIR/lib" "$PACKAGE_DIR/include"
 
 if [ "$IS_WASM" -eq 1 ]; then
-    # WASM: cmake --install doesn't work for Emscripten builds.
-    # Manually copy static libraries, headers, and cmake config.
-    echo "Packaging WASM build manually..."
-    find lib -name "*.a" | while read f; do cp "$f" "$PACKAGE_DIR/lib/"; done
-    cp -r ../llvm/include/llvm "$PACKAGE_DIR/include/"
-    cp -r include/llvm/* "$PACKAGE_DIR/include/llvm/" 2>/dev/null || true
-    cp -r ../clang/include/clang "$PACKAGE_DIR/include/"
-    cp -r tools/clang/include/clang/* "$PACKAGE_DIR/include/clang/" 2>/dev/null || true
-    mkdir -p "$PACKAGE_DIR/lib/cmake"
-    cp -r lib/cmake/llvm "$PACKAGE_DIR/lib/cmake/" 2>/dev/null || true
-    cp -r lib/cmake/clang "$PACKAGE_DIR/lib/cmake/" 2>/dev/null || true
+    # WASM: cmake --install (plain, NOT emcmake — install is just file ops)
+    # generates a relocatable CMake config. Do NOT copy build-tree
+    # cmake files: those have hardcoded absolute paths that break when
+    # the artifact is downloaded by a different job.
+    echo "Installing WASM build to $PACKAGE_DIR..."
+    "$CMAKE" --install . --prefix "$PACKAGE_DIR"
 else
     # Native: cmake --install generates relocatable CMake config
     echo "Installing to $PACKAGE_DIR..."
@@ -123,6 +118,24 @@ else
             install_name_tool -id "@rpath/$(basename "$d")" "$d" 2>/dev/null || true
         done
     fi
+fi
+
+# Bundle the LLVM/Clang source tree into the artifact so downstream
+# consumers (clspv, spirv-llvm-translator) can point CLSPV_LLVM_SOURCE_DIR
+# / CLANG_SOURCE_DIR at it. Skip heavy bits we don't need.
+echo "Bundling LLVM/Clang source tree into $PACKAGE_DIR/src..."
+mkdir -p "$PACKAGE_DIR/src/llvm" "$PACKAGE_DIR/src/clang"
+EXCLUDES=(
+    --exclude=test --exclude=unittests --exclude=docs
+    --exclude=examples --exclude=benchmarks --exclude=bindings
+    --exclude=.git
+)
+tar -cf - "${EXCLUDES[@]}" -C ../llvm . | tar -xf - -C "$PACKAGE_DIR/src/llvm"
+tar -cf - "${EXCLUDES[@]}" -C ../clang . | tar -xf - -C "$PACKAGE_DIR/src/clang"
+
+# Record the LLVM tag we built so consumers can verify version match
+if [ -d "../.git" ]; then
+    (cd .. && git describe --tags 2>/dev/null || git rev-parse HEAD) > "$PACKAGE_DIR/VERSION"
 fi
 
 # License

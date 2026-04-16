@@ -11,11 +11,16 @@ echo "Building clspv for $PLATFORM ($NCPU jobs)..."
 
 if [ -z "$CMAKE" ]; then echo "Error: cmake not found"; exit 1; fi
 
-# Find llvm
+# Find llvm artifact (install tree + bundled source tree)
 LLVM_BUILD="${LLVM_BUILD_DIR:-$BUILD_DIR/llvm-project/build}"
 if [ ! -d "$LLVM_BUILD/lib/cmake/llvm" ]; then
-    echo "Error: llvm not found at $LLVM_BUILD"
+    echo "Error: llvm install tree not found at $LLVM_BUILD/lib/cmake/llvm"
     echo "Build llvm first, or set LLVM_BUILD_DIR"
+    exit 1
+fi
+if [ ! -d "$LLVM_BUILD/src/llvm" ] || [ ! -d "$LLVM_BUILD/src/clang" ]; then
+    echo "Error: llvm/clang source tree not found in artifact at $LLVM_BUILD/src/"
+    echo "build-llvm.sh must bundle the source tree alongside the install tree"
     exit 1
 fi
 echo "Using llvm from: $LLVM_BUILD"
@@ -60,8 +65,8 @@ $CMAKE_CMD .. \
     $CMAKE_GENERATOR \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-    -DCLSPV_LLVM_SOURCE_DIR="$BUILD_DIR/llvm-project/llvm" \
-    -DCLSPV_CLANG_SOURCE_DIR="$BUILD_DIR/llvm-project/clang" \
+    -DCLSPV_LLVM_SOURCE_DIR="$LLVM_BUILD/src/llvm" \
+    -DCLSPV_CLANG_SOURCE_DIR="$LLVM_BUILD/src/clang" \
     -DCLSPV_LLVM_BINARY_DIR="$LLVM_BUILD" \
     -DCLSPV_SHARED_LIB=ON \
     -DCLSPV_BUILD_TESTS=OFF \
