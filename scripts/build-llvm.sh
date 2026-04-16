@@ -94,17 +94,33 @@ $CMAKE_CMD ../llvm \
 echo "Building LLVM (this may take a while)..."
 $MAKE_CMD --build . --config Release -j$NCPU
 
-# Install to package directory — this generates relocatable CMake config
+# Package
 PACKAGE_DIR="$OUTPUT_DIR/llvm-$PLATFORM"
-echo "Installing to $PACKAGE_DIR..."
-$MAKE_CMD --build . --target install -- DESTDIR= CMAKE_INSTALL_PREFIX="$PACKAGE_DIR" 2>/dev/null || \
+mkdir -p "$PACKAGE_DIR/lib" "$PACKAGE_DIR/include"
+
+if [ "$IS_WASM" -eq 1 ]; then
+    # WASM: cmake --install doesn't work for Emscripten builds.
+    # Manually copy static libraries, headers, and cmake config.
+    echo "Packaging WASM build manually..."
+    find lib -name "*.a" | while read f; do cp "$f" "$PACKAGE_DIR/lib/"; done
+    cp -r ../llvm/include/llvm "$PACKAGE_DIR/include/"
+    cp -r include/llvm/* "$PACKAGE_DIR/include/llvm/" 2>/dev/null || true
+    cp -r ../clang/include/clang "$PACKAGE_DIR/include/"
+    cp -r tools/clang/include/clang/* "$PACKAGE_DIR/include/clang/" 2>/dev/null || true
+    mkdir -p "$PACKAGE_DIR/lib/cmake"
+    cp -r lib/cmake/llvm "$PACKAGE_DIR/lib/cmake/" 2>/dev/null || true
+    cp -r lib/cmake/clang "$PACKAGE_DIR/lib/cmake/" 2>/dev/null || true
+else
+    # Native: cmake --install generates relocatable CMake config
+    echo "Installing to $PACKAGE_DIR..."
     cmake --install . --prefix "$PACKAGE_DIR"
 
-# Fix rpaths on macOS
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    find "$PACKAGE_DIR/lib" -name "*.dylib" | while read d; do
-        install_name_tool -id "@rpath/$(basename "$d")" "$d" 2>/dev/null || true
-    done
+    # Fix rpaths on macOS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        find "$PACKAGE_DIR/lib" -name "*.dylib" | while read d; do
+            install_name_tool -id "@rpath/$(basename "$d")" "$d" 2>/dev/null || true
+        done
+    fi
 fi
 
 # License
