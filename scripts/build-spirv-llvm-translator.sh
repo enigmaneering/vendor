@@ -40,6 +40,15 @@ if [ "$IS_WASM" -eq 1 ]; then
     CMAKE_CMD=(emcmake "$CMAKE")
     MAKE_CMD=(emmake "$CMAKE")
     SHARED=OFF
+elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    # Windows: LLVM is distributed as static .a archives. Building
+    # SPIRV-LLVM-Translator with BUILD_SHARED_LIBS=ON bundles those statics
+    # into libLLVMSPIRVLib.dll, and its import lib then re-exports the LLVM
+    # symbols. Linking llvm-spirv.exe pulls both the import lib and LLVM's
+    # static .a → "multiple definition" errors. Match WASM and go static.
+    CMAKE_CMD=("$CMAKE")
+    MAKE_CMD=("$CMAKE")
+    SHARED=OFF
 else
     CMAKE_CMD=("$CMAKE")
     MAKE_CMD=("$CMAKE")
@@ -62,7 +71,8 @@ PACKAGE_DIR="$OUTPUT_DIR/spirv-llvm-translator-$PLATFORM"
 mkdir -p "$PACKAGE_DIR/lib" "$PACKAGE_DIR/include"
 
 echo "Packaging spirv-llvm-translator..."
-if [ "$IS_WASM" -eq 1 ]; then
+if [ "$IS_WASM" -eq 1 ] || [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    # WASM + Windows: static .a (see SHARED=OFF branch above)
     find lib -name "*.a" | while read f; do cp "$f" "$PACKAGE_DIR/lib/"; done
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     find lib -name "libLLVMSPIRVLib*.dylib" | while read f; do cp "$f" "$PACKAGE_DIR/lib/"; done

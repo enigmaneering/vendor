@@ -51,6 +51,32 @@ if [ ! -d "$LLVM_BUILD/src/cmake" ]; then
     rm -rf "$FETCH_DIR"
 fi
 
+# Stub out subdirectories that build-llvm.sh excluded from the LLVM/Clang
+# source bundle. LLVM/Clang/clspv do unconditional add_subdirectory() calls
+# on these paths (the LLVM_INCLUDE_* / CLANG_INCLUDE_* flags guard the *build*
+# logic, not the subdir inclusion itself). An empty CMakeLists.txt makes
+# add_subdirectory a no-op, and satisfies ExternalProject_Add's
+# "existing non-empty directory" check.
+STUB_CMAKELISTS='cmake_minimum_required(VERSION 3.13.4)
+project(stub LANGUAGES NONE)
+# Placeholder for a subtree excluded from the LLVM source bundle.
+'
+for stub in \
+    runtimes \
+    third-party/unittest \
+    clang/examples \
+    clang/unittests \
+    clang/test \
+    clang/docs \
+    clang/bindings \
+    clang/bindings/python/tests; do
+    STUB_PATH="$LLVM_BUILD/src/$stub"
+    mkdir -p "$STUB_PATH"
+    if [ ! -f "$STUB_PATH/CMakeLists.txt" ]; then
+        printf '%s' "$STUB_CMAKELISTS" > "$STUB_PATH/CMakeLists.txt"
+    fi
+done
+
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
