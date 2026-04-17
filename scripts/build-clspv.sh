@@ -134,19 +134,24 @@ if [ "$IS_WASM" -eq 1 ]; then
         echo "=== WASM libclc prep: building spir-- bitcode ==="
         rm -rf "$LIBCLC_BUILD"
         mkdir -p "$LIBCLC_BUILD"
-        # Prepend native tools to PATH so libclc's find_program(clang ...),
-        # llvm-link, opt all resolve to our shipped binaries — most robust
-        # way to steer libclc without guessing its exact CMake variable names.
+        # libclc's toolchain detection uses LLVM_TOOLS_BINARY_DIR (exported
+        # by LLVMConfig.cmake) to locate clang/llvm-link/opt — NOT $PATH.
+        # The wasm LLVM's cmake config points that at the wasm install's
+        # bin/ directory (full of non-executable .js/.wasm stubs), so we
+        # override it to our native bin. Only tools we actually ship are
+        # pinned explicitly; any other tool libclc wants will surface as
+        # a specific "missing tool X" error we can then add to the bundle.
         (cd "$LIBCLC_BUILD" && \
-            PATH="$NATIVE_BIN:$PATH" \
             "$CMAKE" "$LLVM_BUILD/src/libclc" \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_INSTALL_PREFIX="$LIBCLC_INSTALL" \
                 -DLIBCLC_TARGETS_TO_BUILD="spir--" \
-                -DLLVM_DIR="$LLVM_BUILD/lib/cmake/llvm" && \
-            PATH="$NATIVE_BIN:$PATH" \
+                -DLLVM_DIR="$LLVM_BUILD/lib/cmake/llvm" \
+                -DLLVM_TOOLS_BINARY_DIR="$NATIVE_BIN" \
+                -DLLVM_CLANG="$NATIVE_BIN/clang" \
+                -DLLVM_LINK="$NATIVE_BIN/llvm-link" \
+                -DLLVM_OPT="$NATIVE_BIN/opt" && \
             "$CMAKE" --build . --config Release -j$NCPU && \
-            PATH="$NATIVE_BIN:$PATH" \
             "$CMAKE" --install .)
 
         # clspv looks for $CLSPV_EXTERNAL_LIBCLC_DIR/spir--/libclc.bc. libclc
