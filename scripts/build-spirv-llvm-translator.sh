@@ -33,17 +33,20 @@ if [ ! -f "LICENSE.TXT" ]; then echo "Error: LICENSE.TXT not found"; exit 1; fi
 mkdir -p build
 cd build
 
+# Arrays (not strings) so $CMAKE with spaces (e.g. Git Bash resolving to
+# "/c/Program Files/CMake/bin/cmake.exe" when MSYS2 isn't installed on the
+# Windows runner) survives word-splitting at expansion time.
 if [ "$IS_WASM" -eq 1 ]; then
-    CMAKE_CMD="emcmake $CMAKE"
-    MAKE_CMD="emmake $CMAKE"
+    CMAKE_CMD=(emcmake "$CMAKE")
+    MAKE_CMD=(emmake "$CMAKE")
     SHARED=OFF
 else
-    CMAKE_CMD="$CMAKE"
-    MAKE_CMD="$CMAKE"
+    CMAKE_CMD=("$CMAKE")
+    MAKE_CMD=("$CMAKE")
     SHARED=ON
 fi
 
-$CMAKE_CMD .. \
+"${CMAKE_CMD[@]}" .. \
     $CMAKE_GENERATOR \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
@@ -51,7 +54,7 @@ $CMAKE_CMD .. \
     -DBUILD_SHARED_LIBS=$SHARED \
     -DLLVM_INCLUDE_TESTS=OFF
 
-$MAKE_CMD --build . --config Release -j$NCPU
+"${MAKE_CMD[@]}" --build . --config Release -j$NCPU
 
 # Package
 PACKAGE_DIR="$OUTPUT_DIR/spirv-llvm-translator-$PLATFORM"
