@@ -123,6 +123,23 @@ if [ "$IS_WASM" -eq 1 ]; then
             exit 1
         fi
     done
+
+    # Integrity check on the LLVM artifact's source bundle. clspv's build
+    # references TD files from CLSPV_LLVM_SOURCE_DIR via tablegen; if any
+    # are missing the build fails mid-compile with a cryptic tablegen
+    # "Could not open input file" error. Surface it here instead.
+    for required in \
+        "src/llvm/lib/Target/AArch64/AArch64.td" \
+        "src/llvm/lib/Target/X86/X86.td" \
+        "src/llvm/include/llvm/IR/Intrinsics.td"; do
+        if [ ! -f "$LLVM_BUILD/$required" ]; then
+            echo "Error: LLVM artifact is missing $required"
+            echo "Contents of $LLVM_BUILD/src/llvm/lib/Target/ (first 20):"
+            ls "$LLVM_BUILD/src/llvm/lib/Target/" 2>&1 | head -20
+            exit 1
+        fi
+    done
+    echo "LLVM artifact integrity check passed."
     if [ ! -d "$LLVM_BUILD/src/libclc" ]; then
         echo "Error: libclc source not found at $LLVM_BUILD/src/libclc"
         echo "build-llvm.sh must bundle the full llvm-project source tree"
