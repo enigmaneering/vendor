@@ -209,20 +209,28 @@ if [ "$IS_WASM" -eq 1 ]; then
     fi
     echo "DIAGNOSTIC (post-libclc): AArch64.td still present."
 
-    # Background watcher: log the exact instant AArch64.td is removed,
-    # alongside which step/pid did it (via inotifywait if available,
-    # otherwise a 1-second polling fallback).
+    # Background watcher: log the exact instant AArch64.td is removed.
+    # (In the last diagnostic run the watcher stayed silent — file never
+    # disappeared — yet tablegen still errored with "No such file". Keeping
+    # the watcher for belt-and-braces; the new lever is VERBOSE_MAKEFILE
+    # below to reveal the exact tablegen invocation.)
     TARGET_TD="$LLVM_BUILD/src/llvm/lib/Target/AArch64/AArch64.td"
-    WATCHER_LOG="$BUILD_DIR/td-watcher.log"
     (
         while [ -f "$TARGET_TD" ]; do sleep 1; done
-        printf 'WATCHER: %s gone at %s\n' "$TARGET_TD" "$(date +%T.%N)" | tee -a "$WATCHER_LOG"
-        ls -la "$LLVM_BUILD/src/llvm/lib/Target/AArch64/" 2>&1 | head -10 | tee -a "$WATCHER_LOG"
-        # Check if the containing dir is still present
-        ls -la "$LLVM_BUILD/src/llvm/lib/Target/" 2>&1 | head -20 | tee -a "$WATCHER_LOG"
+        printf 'WATCHER: %s gone at %s\n' "$TARGET_TD" "$(date +%T.%N)"
+        ls -la "$LLVM_BUILD/src/llvm/lib/Target/AArch64/" 2>&1 | head -10
     ) &
     TD_WATCHER_PID=$!
-    trap 'kill $TD_WATCHER_PID 2>/dev/null' EXIT
+
+    # On script exit (success or failure), dump the file's actual state so
+    # we can confirm whether it's present-but-inaccessible at failure time.
+    trap '
+        echo "=== EXIT TRAP: AArch64.td state at script exit ==="
+        ls -la "'"$TARGET_TD"'" 2>&1 || true
+        stat "'"$TARGET_TD"'" 2>&1 || true
+        head -3 "'"$TARGET_TD"'" 2>&1 | head -3 || true
+        kill $TD_WATCHER_PID 2>/dev/null
+    ' EXIT
 fi
 
 # Arrays (not strings) so $CMAKE with spaces (e.g. Git Bash resolving to
@@ -243,6 +251,7 @@ fi
     $CMAKE_OSX_ARCH_FLAG \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DCMAKE_VERBOSE_MAKEFILE=ON \
     -DCLSPV_LLVM_SOURCE_DIR="$LLVM_BUILD/src/llvm" \
     -DCLSPV_CLANG_SOURCE_DIR="$LLVM_BUILD/src/clang" \
     -DCLSPV_LLVM_BINARY_DIR="$LLVM_BUILD" \
