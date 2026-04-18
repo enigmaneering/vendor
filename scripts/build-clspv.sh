@@ -131,45 +131,52 @@ if [ "$IS_WASM" -eq 1 ]; then
 
     LIBCLC_BUILD="$BUILD_DIR/libclc-build"
     LIBCLC_INSTALL="$BUILD_DIR/libclc-install"
-    if [ ! -f "$LIBCLC_INSTALL/spir--/libclc.bc" ]; then
-        echo "=== WASM libclc prep: building spir-- bitcode ==="
+    # clspv's cmake (clspv/cmake/CMakeLists.txt) hardcodes the lookup at
+    #   $CLSPV_EXTERNAL_LIBCLC_DIR/spir--/libclc.bc        (32-bit)
+    #   $CLSPV_EXTERNAL_LIBCLC_DIR/spir64--/libclc.bc      (64-bit)
+    # ...but LLVM 22.1.3 libclc retired the spir-- triples. The equivalent
+    # modern targets are clspv-- (32) / clspv64-- (64). Build both, then
+    # stage outputs at the spir--/spir64-- paths clspv still probes for.
+    if [ ! -f "$LIBCLC_INSTALL/spir--/libclc.bc" ] || [ ! -f "$LIBCLC_INSTALL/spir64--/libclc.bc" ]; then
+        echo "=== WASM libclc prep: building clspv-- and clspv64-- bitcode ==="
         rm -rf "$LIBCLC_BUILD"
         mkdir -p "$LIBCLC_BUILD"
         # libclc's CMakeLists.txt (line 61+) does find_package(LLVM), which
         # sets LLVM_TOOLS_BINARY_DIR from LLVMConfig.cmake — that points at
         # the wasm install's bin/ (full of .js/.wasm stubs, not executables).
         # Passing -DLLVM_TOOLS_BINARY_DIR=... doesn't help — find_package
-        # overwrites it.
-        #
-        # libclc provides a purpose-built override hook: if
-        # LIBCLC_CUSTOM_LLVM_TOOLS_BINARY_DIR is set (line 121), it bypasses
-        # the find_package-derived path and does NO_DEFAULT_PATH
-        # find_program lookups in our dir instead.
+        # overwrites it. libclc has a purpose-built override hook:
+        # LIBCLC_CUSTOM_LLVM_TOOLS_BINARY_DIR bypasses the find_package
+        # path and does NO_DEFAULT_PATH find_program in our dir instead.
         (cd "$LIBCLC_BUILD" && \
             "$CMAKE" "$LLVM_BUILD/src/libclc" \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_INSTALL_PREFIX="$LIBCLC_INSTALL" \
-                -DLIBCLC_TARGETS_TO_BUILD="spir--" \
+                -DLIBCLC_TARGETS_TO_BUILD="clspv--;clspv64--" \
                 -DLLVM_DIR="$LLVM_BUILD/lib/cmake/llvm" \
                 -DLIBCLC_CUSTOM_LLVM_TOOLS_BINARY_DIR="$NATIVE_BIN" && \
             "$CMAKE" --build . --config Release -j$NCPU && \
             "$CMAKE" --install .)
 
-        # clspv looks for $CLSPV_EXTERNAL_LIBCLC_DIR/spir--/libclc.bc. libclc
-        # installs under <prefix>/share/clc/... with naming variants across
-        # LLVM versions (spir--.bc, spir--/libclc.bc, etc.). Find whatever
-        # got produced and arrange it at the path clspv expects.
-        LIBCLC_BC=$(find "$LIBCLC_INSTALL" -type f -name '*.bc' | head -1)
-        if [ -z "$LIBCLC_BC" ]; then
-            echo "Error: libclc build produced no .bc file; install tree:"
-            find "$LIBCLC_INSTALL" -type f
-            exit 1
-        fi
-        mkdir -p "$LIBCLC_INSTALL/spir--"
-        [ -f "$LIBCLC_INSTALL/spir--/libclc.bc" ] || cp "$LIBCLC_BC" "$LIBCLC_INSTALL/spir--/libclc.bc"
-        echo "libclc ready at: $LIBCLC_INSTALL/spir--/libclc.bc"
+        # Stage each built triple's .bc at the spir--/spir64-- path clspv
+        # hardcodes. libclc's install layout varies by version (could be
+        # <prefix>/share/clc/<triple>/libclc.bc, <triple>.bc, etc.) — match
+        # on the triple name anywhere in the installed path.
+        for pair in "clspv--:spir--" "clspv64--:spir64--"; do
+            SRC_TRIPLE="${pair%:*}"
+            DST_TRIPLE="${pair#*:}"
+            SRC_BC=$(find "$LIBCLC_INSTALL" -type f -name '*.bc' -path "*${SRC_TRIPLE}*" | head -1)
+            if [ -z "$SRC_BC" ]; then
+                echo "Error: libclc did not produce bitcode for triple $SRC_TRIPLE. Install tree:"
+                find "$LIBCLC_INSTALL" -type f
+                exit 1
+            fi
+            mkdir -p "$LIBCLC_INSTALL/$DST_TRIPLE"
+            cp "$SRC_BC" "$LIBCLC_INSTALL/$DST_TRIPLE/libclc.bc"
+            echo "Staged $SRC_TRIPLE → $LIBCLC_INSTALL/$DST_TRIPLE/libclc.bc"
+        done
     else
-        echo "Reusing cached libclc at: $LIBCLC_INSTALL/spir--/libclc.bc"
+        echo "Reusing cached libclc at: $LIBCLC_INSTALL/{spir--,spir64--}/libclc.bc"
     fi
 
     LIBCLC_DIR="$LIBCLC_INSTALL"
