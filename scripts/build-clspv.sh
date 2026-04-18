@@ -197,6 +197,32 @@ if [ "$IS_WASM" -eq 1 ]; then
     fi
 
     LIBCLC_DIR="$LIBCLC_INSTALL"
+
+    # Diagnostic: verify the LLVM source tree is still intact after libclc
+    # prep. On a previous run the clspv tablegen step failed 10 min later
+    # with "Could not open input file ...AArch64.td" despite the file being
+    # confirmed present at the start of this script. Narrow the window.
+    if [ ! -f "$LLVM_BUILD/src/llvm/lib/Target/AArch64/AArch64.td" ]; then
+        echo "DIAGNOSTIC: AArch64.td disappeared during libclc prep!"
+        ls -la "$LLVM_BUILD/src/llvm/lib/Target/AArch64/" 2>&1 | head -5
+        exit 1
+    fi
+    echo "DIAGNOSTIC (post-libclc): AArch64.td still present."
+
+    # Background watcher: log the exact instant AArch64.td is removed,
+    # alongside which step/pid did it (via inotifywait if available,
+    # otherwise a 1-second polling fallback).
+    TARGET_TD="$LLVM_BUILD/src/llvm/lib/Target/AArch64/AArch64.td"
+    WATCHER_LOG="$BUILD_DIR/td-watcher.log"
+    (
+        while [ -f "$TARGET_TD" ]; do sleep 1; done
+        printf 'WATCHER: %s gone at %s\n' "$TARGET_TD" "$(date +%T.%N)" | tee -a "$WATCHER_LOG"
+        ls -la "$LLVM_BUILD/src/llvm/lib/Target/AArch64/" 2>&1 | head -10 | tee -a "$WATCHER_LOG"
+        # Check if the containing dir is still present
+        ls -la "$LLVM_BUILD/src/llvm/lib/Target/" 2>&1 | head -20 | tee -a "$WATCHER_LOG"
+    ) &
+    TD_WATCHER_PID=$!
+    trap 'kill $TD_WATCHER_PID 2>/dev/null' EXIT
 fi
 
 # Arrays (not strings) so $CMAKE with spaces (e.g. Git Bash resolving to
