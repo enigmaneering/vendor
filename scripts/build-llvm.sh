@@ -41,22 +41,36 @@ if [ -z "$LLVM_TAG" ]; then
     echo "Error: could not determine LLVM version to build"; exit 1
 fi
 if [ ! -d "llvm-project" ]; then
-    echo "Cloning LLVM at $LLVM_TAG..."
-    # Git doesn't support `--depth 1` directly targeting an arbitrary SHA
-    # via --branch. Download the GitHub-hosted tarball instead — much
-    # faster than cloning metadata history (llvm-project's main has
-    # hundreds of thousands of commits) and gives us just the tree at
-    # the SHA. Downstream steps don't need .git (the VERSION file
-    # fallback in this script uses $LLVM_TAG directly when no .git exists).
-    curl -sSLf "https://codeload.github.com/llvm/llvm-project/tar.gz/$LLVM_TAG" | tar -xz
-    # Tarball unpack dir: "llvm-project-<ref>" where <ref> is the SHA or tag
-    # exactly as passed to codeload. Find-and-rename handles both shapes.
-    UNPACK_DIR=$(ls -d llvm-project-* 2>/dev/null | head -1)
-    if [ -z "$UNPACK_DIR" ]; then
-        echo "Error: codeload tarball did not produce a llvm-project-* directory"
-        exit 1
-    fi
-    mv "$UNPACK_DIR" llvm-project
+    echo "Fetching LLVM at $LLVM_TAG..."
+    # Fetch via git (not tarball) so Windows MSYS2 handles symlinks safely.
+    # MSYS2's tar fails on symlink entries it can't create natively (needs
+    # winsymlinks:nativestrict + privilege, neither available on GH Actions
+    # runners), which historically took down Windows LLVM builds whenever
+    # the tree contained test-fixture or utility-script symlinks. Git on
+    # Windows degrades symlinks to regular text files when native symlink
+    # support isn't available — same visibility as Unix, no broken builds.
+    #
+    # We avoid cloning the full llvm-project history (hundreds of thousands
+    # of commits, ~2GB+ of metadata) by doing init + targeted-SHA fetch.
+    # GitHub allows `git fetch <SHA>` on any commit via uploadpack.allowAny
+    # SHA1InWant, so `--depth 1 origin <SHA>` is a single-commit download.
+    mkdir llvm-project
+    (
+        cd llvm-project
+        git init -q
+        git remote add origin https://github.com/llvm/llvm-project.git
+        git -c advice.detachedHead=false fetch --depth 1 origin "$LLVM_TAG"
+        git -c advice.detachedHead=false checkout FETCH_HEAD
+    )
+    # Canary check: the core build trees must be present.
+    for required in "llvm-project/llvm/lib/Target" "llvm-project/llvm/CMakeLists.txt" \
+                    "llvm-project/clang/lib" "llvm-project/clang/CMakeLists.txt" \
+                    "llvm-project/cmake"; do
+        if [ ! -e "$required" ]; then
+            echo "Error: LLVM checkout incomplete — $required missing"
+            exit 1
+        fi
+    done
 fi
 
 # Verify license
@@ -233,8 +247,10 @@ tar -cf - \
     --exclude=build-native \
     -C .. . | tar -xf - -C "$PACKAGE_DIR/src"
 
-# Record the LLVM commit we built so consumers can verify version match.
-# We clone-by-tarball now (no .git), so just write the pinned SHA directly.
+# Record the LLVM commit/tag we built so consumers can verify version
+# match. $LLVM_TAG is whatever the resolver produced: a SHA (typical CI
+# path — from determine-llvm-sha via clspv's deps.json), or an llvmorg-*
+# release tag (fallback). Either form is a valid upstream identifier.
 echo "$LLVM_TAG" > "$PACKAGE_DIR/VERSION"
 
 # License
