@@ -30,3 +30,12 @@ All tools are provided for:
 ## License
 
 All components are Apache 2.0 or dual MIT/Apache 2.0. Licenses are verified on every build and packaged alongside each artifact.
+
+## Windows Note
+
+Our Windows artifacts are PE/COFF DLLs built via MSYS2 UCRT64 (GCC / MinGW-w64 family), not MSVC — they
+link against ucrtbase.dll (the Universal CRT) and ship with GCC-style .dll.a import libraries rather than
+MSVC .lib files. Consumers need a UCRT-family toolchain (MSYS2, MinGW-w64 UCRT, or clang in UCRT mode);
+plain MSVC can't link them directly due to the CRT coupling and import-lib format differences.
+
+There are so many reasons for this, mostly from interoperability perspectives.

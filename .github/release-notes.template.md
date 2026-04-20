@@ -17,7 +17,6 @@ Complete cross-platform shader compilation toolchain with support for GLSL, HLSL
 | **Naga** | Rust-based WebGPU shader compiler | WGSL/GLSL/SPIRV ↔ SPIRV/WGSL/MSL/HLSL/GLSL |
 | **clspv** | OpenCL C to Vulkan SPIR-V compiler | OpenCL C → SPIR-V for cross-backend compute |
 | **llvm** | LLVM + Clang (NVPTX, AMDGPU backends) | Foundation for clspv and SPIRV-LLVM-Translator |
-| **clspv** | OpenCL C → Vulkan SPIR-V (built against llvm) | Memory model transformation |
 | **spirv-llvm-translator** | SPIR-V ↔ LLVM IR bridge (built against llvm) | Cross-hub translation |
 | **wgpu-native** | Cross-platform WebGPU implementation | GPU compute via Metal/Vulkan/D3D12/OpenGL |
 
@@ -36,8 +35,18 @@ Each tool is packaged separately:
 - `glslang-{platform}.tar.gz` / `.zip`
 - `spirv-cross-{platform}.tar.gz` / `.zip`
 - `naga-{platform}.tar.gz` / `.zip`
+- `clspv-{platform}.tar.gz` / `.zip`
+- `llvm-{platform}.tar.gz` / `.zip`
+- `spirv-llvm-translator-{platform}.tar.gz` / `.zip`
 - `wgpu-{platform}.tar.gz`
 
 ## 📝 License
 
 All tools maintain their original licenses. See individual tool directories for license information.
+
+## 🪟 Windows Note
+
+Our Windows artifacts are PE/COFF DLLs built via MSYS2 UCRT64 (GCC / MinGW-w64 family), not MSVC — they 
+link against ucrtbase.dll (the Universal CRT) and ship with GCC-style .dll.a import libraries rather than 
+MSVC .lib files. Consumers need a UCRT-family toolchain (MSYS2, MinGW-w64 UCRT, or clang in UCRT mode); 
+plain MSVC can't link them directly due to the CRT coupling and import-lib format differences.
