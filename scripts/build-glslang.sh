@@ -176,6 +176,7 @@ cmake .. \
     -DENABLE_GLSLANG_BINARIES=OFF \
     -DENABLE_CTEST=OFF \
     -DENABLE_OPT=ON \
+    -DENABLE_HLSL=OFF \
     -DGLSLANG_TESTS=OFF
 
 cmake --build . --config Release -j$NCPU
