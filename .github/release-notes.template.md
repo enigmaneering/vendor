@@ -14,9 +14,10 @@ Complete cross-platform shader compilation toolchain with support for GLSL, HLSL
 |------|-------------|--------------|
 | **glslang** | Reference GLSL/ESSL validator and compiler | GLSL/ESSL → SPIRV, with SPIRV optimizer |
 | **SPIRV-Cross** | SPIRV reflection and transpiler | SPIRV → GLSL/HLSL/MSL/WGSL |
+| **spirv-to-dxil** | Mesa's SPIR-V → DXIL compiler (carve-out, no LLVM dep) | SPIR-V → DXIL for D3D12 (Windows amd64/arm64 + Linux build-cover) |
 | **Naga** | Rust-based WebGPU shader compiler | WGSL/GLSL/SPIRV ↔ SPIRV/WGSL/MSL/HLSL/GLSL |
 | **clspv** | OpenCL C to Vulkan SPIR-V compiler | OpenCL C → SPIR-V for cross-backend compute |
-| **llvm** | LLVM + Clang (NVPTX, AMDGPU backends) | Foundation for clspv and SPIRV-LLVM-Translator |
+| **llvm** | LLVM + Clang (NVPTX, AMDGPU, SPIRV experimental backends) | Foundation for clspv and SPIRV-LLVM-Translator |
 | **spirv-llvm-translator** | SPIR-V ↔ LLVM IR bridge (built against llvm) | Cross-hub translation |
 | **wgpu-native** | Cross-platform WebGPU implementation | GPU compute via Metal/Vulkan/D3D12/OpenGL |
 
@@ -34,6 +35,7 @@ All binaries are provided for the following platforms:
 Each tool is packaged separately:
 - `glslang-{platform}.tar.gz` / `.zip`
 - `spirv-cross-{platform}.tar.gz` / `.zip`
+- `spirv-to-dxil-{platform}.tar.gz` (Linux x86_64/ARM64 + Windows x86_64/ARM64; macOS and WASM omitted — no D3D12 consumer there)
 - `naga-{platform}.tar.gz` / `.zip`
 - `clspv-{platform}.tar.gz` / `.zip`
 - `llvm-{platform}.tar.gz` / `.zip`

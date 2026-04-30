@@ -118,6 +118,11 @@ jobs:
           # SPIRV-LLVM-Translator: we specifically track main (matches LLVM
           # main via clspv's pin). Its llvm_release_* branches would drift.
           git clone --depth 1 --branch main https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git spirv-llvm-translator
+          # Mesa: only the spirv-to-dxil carve-out lands in our packages,
+          # but the umbrella license text is what consumers reference.
+          # Pin to the same release tag the build script uses so a Mesa
+          # release with a license amendment is caught BEFORE the build.
+          git clone --depth 1 --branch mesa-26.0.6 https://gitlab.freedesktop.org/mesa/mesa.git mesa
           # LLVM: pinned to the exact commit determine-llvm-sha resolved from
           # clspv's deps.json, so a license change at that exact commit is
           # caught before the multi-hour build kicks off. `git clone --branch`
@@ -140,6 +145,7 @@ jobs:
           EXPECTED_LLVM="8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee"
           EXPECTED_CLANG="ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47"
           EXPECTED_SPIRV_TRANSLATOR="e3bc36440fc927c62d5cc24efeefe225a14d4e34ffeb0c92e430625cce9ee444"
+          EXPECTED_MESA="0d1a0472ecc81830e75c20d59b0ea02841e3db21255e0ebad97ab682c54d6615"
 
           FAILED=0
           CHANGES=""
@@ -168,6 +174,7 @@ jobs:
           check "LLVM" llvm-project/llvm/LICENSE.TXT "$EXPECTED_LLVM"
           check "Clang" llvm-project/clang/LICENSE.TXT "$EXPECTED_CLANG"
           check "SPIRV-LLVM-Translator" spirv-llvm-translator/LICENSE.TXT "$EXPECTED_SPIRV_TRANSLATOR"
+          check "Mesa (spirv-to-dxil)" mesa/docs/license.rst "$EXPECTED_MESA"
 
           echo "CHANGES<<EOF" >> $GITHUB_ENV
           echo -e "$CHANGES" >> $GITHUB_ENV
@@ -559,6 +566,106 @@ jobs:
         with:
           name: spirv-cross-${{ matrix.platform }}
           path: ${{ runner.temp }}/output/spirv-cross-${{ matrix.platform }}.*
+
+  # Mesa's spirv-to-dxil — SPIR-V → DXIL compiler for the D3D12 backend.
+  # MIT-licensed, NIR-based (no LLVM dependency), ~5-15 MB static archive.
+  # Replaces the DXC subprocess invocation that was libmental's old
+  # HLSL → DXIL stage; libmental can now feed SPIR-V (already its hub
+  # format) directly to D3D12 via this library.
+  #
+  # Built for Linux (amd64 + arm64) and Windows (amd64 + arm64).  D3D12
+  # is Windows-only at runtime — Surface Pro X / Snapdragon X Elite
+  # ARM64 Windows machines are first-class D3D12 hosts, so we build for
+  # arm64 too — and Linux gets the artifact as build-validation cover.
+  # macOS and WASM are skipped: Mesa's microsoft/compiler subtree pulls
+  # in <malloc.h> which doesn't exist on Apple, and neither platform
+  # has a D3D12 backend at runtime.
+  #
+  # Windows ARM64 builds NATIVELY on the windows-11-arm runner via
+  # MSYS2's CLANGARM64 subsystem (no cross-compile gymnastics required).
+  build-mesa-spirv-to-dxil:
+    needs: [verify-licenses]
+    name: "Build Mesa spirv-to-dxil (${{ matrix.platform }})"
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            runner: ubuntu-latest
+            platform: linux-amd64
+          - os: ubuntu-latest
+            runner: ubuntu-24.04-arm
+            platform: linux-arm64
+          - os: windows-latest
+            runner: windows-latest
+            platform: windows-amd64
+            msys_subsystem: MINGW64
+            mingw_pkg_prefix: x86_64
+          - os: windows-latest
+            runner: windows-11-arm
+            platform: windows-arm64
+            msys_subsystem: CLANGARM64
+            mingw_pkg_prefix: clang-aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Linux: install meson + ninja + python3 from apt.  Mesa's meson
+      # build also wants the python `mako` and `pyyaml` packages; the
+      # build script pip-installs those defensively, but we make sure
+      # pip itself is present.
+      - name: Setup Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build python3 python3-pip
+
+      # Windows: pacman packages for the matching MSYS2 subsystem.
+      #   MINGW64    on x86_64 → mingw-w64-x86_64-*       (gcc toolchain)
+      #   CLANGARM64 on arm64  → mingw-w64-clang-aarch64-* (clang toolchain;
+      #                          no native gcc cross to ARM64 in MSYS2)
+      # Both subsystems ship meson, ninja, python, and the python-mako /
+      # python-yaml modules Mesa's build helpers need.
+      - name: Setup MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msys_subsystem }}
+          update: false
+          cache: true
+          install: >-
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-cc
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-meson
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-ninja
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-python
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-python-mako
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-python-yaml
+            git
+
+      - name: Build Mesa spirv-to-dxil (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          chmod +x scripts/build-mesa-spirv-to-dxil.sh
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
+          MENTAL_PLATFORM="${{ matrix.platform }}" \
+          bash scripts/build-mesa-spirv-to-dxil.sh
+
+      - name: Build Mesa spirv-to-dxil (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          BUILD_DIR="${{ runner.temp }}/build" \
+          OUTPUT_DIR="${{ runner.temp }}/output" \
+          MENTAL_PLATFORM="${{ matrix.platform }}" \
+          bash scripts/build-mesa-spirv-to-dxil.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spirv-to-dxil-${{ matrix.platform }}
+          path: ${{ runner.temp }}/output/spirv-to-dxil-${{ matrix.platform }}.tar.gz
 
   build-llvm:
     needs: [verify-licenses, determine-llvm-sha]
@@ -1082,7 +1189,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: '{glslang,spirv-cross,naga,wgpu,llvm,clspv,spirv-llvm-translator}-*'
+          pattern: '{glslang,spirv-cross,spirv-to-dxil,naga,wgpu,llvm,clspv,spirv-llvm-translator}-*'
 
       - name: Display artifact structure
         run: ls -R artifacts

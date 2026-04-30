@@ -7,9 +7,12 @@ BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/../build}"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/../output}"
 
 # Windows: ensure MSYS2 MinGW tools are on PATH (must happen before
-# platform detection since cmake/ninja/python resolution depends on it)
+# platform detection since cmake/ninja/python resolution depends on it).
+# Order is broadest-first: clangarm64 entries are only present on the
+# windows-11-arm runner (CLANGARM64 subsystem); mingw64 + ucrt64 cover
+# x86_64 hosts.  Non-existent dirs in PATH are harmless.
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    export PATH="/mingw64/bin:/ucrt64/bin:$PATH"
+    export PATH="/clangarm64/bin:/mingw64/bin:/ucrt64/bin:$PATH"
 
     # Normalize Windows-native paths (e.g. D:\a\_temp/output) to POSIX form
     # (/d/a/_temp/output) so tools like tar don't parse the drive-letter colon
