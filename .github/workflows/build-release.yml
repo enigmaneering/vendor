@@ -610,15 +610,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Linux: install meson + ninja + python3 from apt.  Mesa's meson
-      # build also wants the python `mako` and `pyyaml` packages; the
-      # build script pip-installs those defensively, but we make sure
-      # pip itself is present.
+      # Linux: install ninja + python3 from apt.  Meson comes from pip,
+      # NOT apt — Ubuntu 24.04 (ubuntu-latest as of this writing) ships
+      # meson 1.3.2 via apt, but Mesa 26.0.6 requires meson >= 1.4.0.
+      # pip3 install lands in $HOME/.local/bin, which we surface via
+      # $GITHUB_PATH so subsequent steps (and the build script's
+      # `command -v meson` check) find it ahead of any system meson.
+      #
+      # Mesa's meson build also wants the python `mako` and `pyyaml`
+      # packages; the build script pip-installs those defensively.
       - name: Setup Linux build deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson ninja-build python3 python3-pip
+          sudo apt-get install -y ninja-build python3 python3-pip
+          pip3 install --user --break-system-packages "meson>=1.4.0"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       # Windows: pacman packages for the matching MSYS2 subsystem.
       #   MINGW64    on x86_64 → mingw-w64-x86_64-*       (gcc toolchain)
