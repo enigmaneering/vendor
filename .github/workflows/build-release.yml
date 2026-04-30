@@ -631,8 +631,16 @@ jobs:
       #   MINGW64    on x86_64 → mingw-w64-x86_64-*       (gcc toolchain)
       #   CLANGARM64 on arm64  → mingw-w64-clang-aarch64-* (clang toolchain;
       #                          no native gcc cross to ARM64 in MSYS2)
-      # Both subsystems ship meson, ninja, python, and the python-mako /
-      # python-yaml modules Mesa's build helpers need.
+      # Both subsystems ship meson, ninja, python, and the python-{mako,
+      # yaml,packaging} modules Mesa's build helpers need.
+      #
+      # python-packaging is load-bearing: Mesa's meson.build does
+      #   from packaging.version import Version
+      #   except: from distutils.version import StrictVersion
+      # but distutils was REMOVED from Python's stdlib in 3.12.  Python
+      # 3.14 (what MSYS2 currently ships) hits the except, finds no
+      # distutils either, and aborts.  Installing python-packaging is
+      # the modern path.
       - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -647,6 +655,7 @@ jobs:
             mingw-w64-${{ matrix.mingw_pkg_prefix }}-python
             mingw-w64-${{ matrix.mingw_pkg_prefix }}-python-mako
             mingw-w64-${{ matrix.mingw_pkg_prefix }}-python-yaml
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-python-packaging
             git
 
       - name: Build Mesa spirv-to-dxil (Linux)

@@ -61,15 +61,27 @@ if [ -z "$PYTHON" ]; then
     exit 1
 fi
 
-# Mesa's meson scripts require `mako` (templating) and `pyyaml` (intel
-# isa table parser, ICD JSON gen).  Even with all drivers disabled,
-# the top-level meson.build runs an "import yaml" check that aborts
-# configure if it's missing.  --break-system-packages is needed on
-# Debian/Ubuntu post-PEP-668; --user keeps it scoped to the runner.
-$PYTHON -m pip install --user --break-system-packages mako pyyaml \
+# Mesa's meson scripts require three Python packages even with all
+# drivers disabled:
+#   mako       — templating (clc / nir-isa generators)
+#   pyyaml     — Intel ISA table parser, ICD JSON generation
+#   packaging  — load-bearing for Mesa's version comparisons.  Mesa's
+#                meson.build tries `from packaging.version import Version`
+#                with `from distutils.version import StrictVersion` as
+#                fallback — but distutils was REMOVED from the Python
+#                stdlib in 3.12, so on any modern Python (Ubuntu 24.04
+#                ships 3.12, MSYS2 ships 3.14) the fallback fails and
+#                the whole meson configure aborts unless `packaging`
+#                is installed.
+# --break-system-packages is needed on Debian/Ubuntu post-PEP-668;
+# --user keeps it scoped to the runner.  The MSYS2/CI workflow
+# pre-installs the equivalent pacman packages so this pip call is a
+# no-op on Windows; the install here is the safety net for Linux and
+# manual local invocations.
+$PYTHON -m pip install --user --break-system-packages mako pyyaml packaging \
     >/dev/null 2>&1 || \
-    $PYTHON -m pip install --user mako pyyaml >/dev/null 2>&1 || \
-    echo "(pip install of mako/pyyaml may have failed — meson configure will tell us)"
+    $PYTHON -m pip install --user mako pyyaml packaging >/dev/null 2>&1 || \
+    echo "(pip install of mako/pyyaml/packaging may have failed — meson configure will tell us)"
 
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
