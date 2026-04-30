@@ -82,9 +82,21 @@ if [ ! -d "mesa-$MESA_VERSION" ]; then
 fi
 cd "mesa-$MESA_VERSION"
 
-# Verify license is in the source tree before we waste time building.
-if [ ! -f "docs/license.rst" ] && [ ! -f "src/microsoft/spirv_to_dxil/spirv_to_dxil.c" ]; then
-    echo "Error: Mesa source layout doesn't match expectations — license / sources missing"
+# Verify license is in the source tree before we waste time building
+# (fail fast — same pattern as build-glslang.sh / build-clspv.sh /
+# build-spirv-llvm-translator.sh).  If Mesa ever moves docs/license.rst
+# we want to know at the start of the build, not after the configure /
+# compile time has been spent.
+if [ ! -f "docs/license.rst" ]; then
+    echo "Error: docs/license.rst not found in Mesa $MESA_VERSION source tree"
+    exit 1
+fi
+# Sanity check: spirv_to_dxil sources must also be present at the
+# expected location — otherwise the meson target name we ninja-build
+# below won't exist.
+if [ ! -f "src/microsoft/spirv_to_dxil/spirv_to_dxil.h" ]; then
+    echo "Error: src/microsoft/spirv_to_dxil/spirv_to_dxil.h not found"
+    echo "       Mesa $MESA_VERSION may have relocated the spirv-to-dxil tree"
     exit 1
 fi
 
@@ -147,17 +159,14 @@ cp build/src/microsoft/spirv_to_dxil/libspirv_to_dxil.a "$PACKAGE_DIR/lib/"
 # small dependency surface (stdint, stdbool).
 cp src/microsoft/spirv_to_dxil/spirv_to_dxil.h "$PACKAGE_DIR/include/"
 
-# Mesa's primary license text.  spirv_to_dxil itself is MIT (per the
-# SPDX header in spirv_to_dxil.c), but Mesa's umbrella docs/license.rst
-# enumerates the per-component licenses including MIT for spirv-to-dxil.
-if [ -f "docs/license.rst" ]; then
-    cp docs/license.rst "$PACKAGE_DIR/LICENSE"
-elif [ -f "docs/license.html" ]; then
-    cp docs/license.html "$PACKAGE_DIR/LICENSE"
-else
-    # Fallback: extract MIT preamble from the source file.
-    head -20 src/microsoft/spirv_to_dxil/spirv_to_dxil.c > "$PACKAGE_DIR/LICENSE"
-fi
+# Mesa's primary license text — preserved with its original .rst
+# extension so consumers can match it against the upstream file we
+# verify in the verify-licenses workflow step.  spirv_to_dxil itself
+# is MIT (per the SPDX header in spirv_to_dxil.c), but Mesa's
+# umbrella docs/license.rst enumerates the per-component licenses
+# including MIT for spirv-to-dxil.  The fail-fast guard at the top
+# of this script ensures docs/license.rst exists before we get here.
+cp docs/license.rst "$PACKAGE_DIR/LICENSE.rst"
 
 # Sanity check — fail loud if the static archive is missing.
 if [ ! -f "$PACKAGE_DIR/lib/libspirv_to_dxil.a" ]; then
