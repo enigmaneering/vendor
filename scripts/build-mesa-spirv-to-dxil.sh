@@ -156,14 +156,18 @@ meson setup build \
 # SPIR-V to spirv2dxil's binary and to their own integration of
 # libspirv_to_dxil.a — if the CLI works and the integration crashes,
 # the bug is in the consumer; if both crash, the bug is in our Mesa
-# build itself.  ~1 MB extra in the package; cheap insurance.
+# build itself.  ~12 MB extra in the package; cheap insurance.
 #
-# spirv2dxil's meson target is `executable('spirv2dxil', ...)` so the
-# ninja target name is the same on every platform — `.exe` extension
-# only appears in the produced filename, not the target.
-ninja -C build -j"$NCPU" \
+# Ninja target name for the executable carries the OS-native suffix —
+# `spirv2dxil` on Linux, `spirv2dxil.exe` on Windows — so a single
+# explicit ninja target string doesn't work cross-platform.  Use
+# `meson compile` instead: meson resolves the executable's logical
+# name (`spirv2dxil`) to the right per-platform path automatically.
+# Static-archive target keeps its full meson path because that one's
+# stable across platforms (.a everywhere).
+meson compile -C build -j "$NCPU" \
     src/microsoft/spirv_to_dxil/libspirv_to_dxil.a \
-    src/microsoft/spirv_to_dxil/spirv2dxil
+    spirv2dxil
 
 # Package
 PACKAGE_DIR="$OUTPUT_DIR/spirv-to-dxil-$PLATFORM"
