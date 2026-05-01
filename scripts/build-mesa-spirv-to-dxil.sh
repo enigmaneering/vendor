@@ -159,15 +159,18 @@ meson setup build \
 # build itself.  ~12 MB extra in the package; cheap insurance.
 #
 # Ninja target name for the executable carries the OS-native suffix —
-# `spirv2dxil` on Linux, `spirv2dxil.exe` on Windows — so a single
-# explicit ninja target string doesn't work cross-platform.  Use
-# `meson compile` instead: meson resolves the executable's logical
-# name (`spirv2dxil`) to the right per-platform path automatically.
-# Static-archive target keeps its full meson path because that one's
-# stable across platforms (.a everywhere).
-meson compile -C build -j "$NCPU" \
+# `spirv2dxil` on Linux, `spirv2dxil.exe` on Windows.  `meson compile`
+# unfortunately rejects the static archive's full path ("target not
+# found"), so we stay on raw ninja and append the per-platform suffix
+# ourselves based on $PLATFORM (set by common.sh).
+SPIRV2DXIL_TARGET="src/microsoft/spirv_to_dxil/spirv2dxil"
+case "$PLATFORM" in
+    windows-*) SPIRV2DXIL_TARGET="${SPIRV2DXIL_TARGET}.exe" ;;
+esac
+
+ninja -C build -j"$NCPU" \
     src/microsoft/spirv_to_dxil/libspirv_to_dxil.a \
-    spirv2dxil
+    "$SPIRV2DXIL_TARGET"
 
 # Package
 PACKAGE_DIR="$OUTPUT_DIR/spirv-to-dxil-$PLATFORM"
