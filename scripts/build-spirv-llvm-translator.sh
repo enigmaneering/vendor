@@ -21,12 +21,26 @@ mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
 if [ ! -d "SPIRV-LLVM-Translator" ]; then
-    # Track SLT's main branch — our LLVM tracks clspv's pin (also on main),
-    # so matching here keeps the LLVM IR contract consistent. SLT's
-    # llvm_release_* branches line up with LLVM stable releases; they'd
-    # drift against our main-pinned LLVM.
-    echo "Cloning SPIRV-LLVM-Translator (main)..."
-    git clone --depth 1 --branch main https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git
+    # Two modes (mirrors build-clspv.sh):
+    #   - TRANSLATOR_SHA set    — pinned clone for cache-friendly CI runs.
+    #                             Init + targeted fetch — same dance as
+    #                             build-clspv.sh's CLSPV_SHA path.
+    #   - TRANSLATOR_SHA unset  — main HEAD clone for manual/local runs.
+    #
+    # Why track main rather than llvm_release_* branches?  Our LLVM tracks
+    # clspv's pin (also on main), so SLT's main keeps the LLVM IR contract
+    # consistent.  llvm_release_* would drift against our main-pinned LLVM.
+    if [ -n "$TRANSLATOR_SHA" ]; then
+        echo "Cloning SPIRV-LLVM-Translator pinned to $TRANSLATOR_SHA..."
+        mkdir SPIRV-LLVM-Translator && (cd SPIRV-LLVM-Translator && \
+            git init -q && \
+            git remote add origin https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git && \
+            git fetch --depth 1 -q origin "$TRANSLATOR_SHA" && \
+            git checkout -q FETCH_HEAD)
+    else
+        echo "Cloning SPIRV-LLVM-Translator (main HEAD; no SHA pin)..."
+        git clone --depth 1 --branch main https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git
+    fi
 fi
 
 cd SPIRV-LLVM-Translator

@@ -34,40 +34,74 @@ jobs:
           fi
 
   # ================================================================
-  #  Resolve the LLVM commit to build against. We track whatever clspv
-  #  pins in its deps.json — clspv's the bleeding-edge consumer that drives
-  #  our LLVM version choice, and spirv-llvm-translator's main branch
-  #  tracks the same moving target. Exposing this SHA as a job output lets
-  #  it feed both the LLVM cache key (so clspv bumps invalidate the cache
-  #  automatically) and the build environment (so the script clones that
-  #  exact commit).
+  #  Resolve all three upstream commits we'll build against in ONE
+  #  atomic step.  Doing this together (rather than per-build) eliminates
+  #  a real race: clspv main can move between separate resolutions, and
+  #  if our LLVM SHA comes from a DIFFERENT clspv tree than the one we
+  #  later build, we ship LLVM that doesn't match the clspv we shipped.
+  #
+  #  Resolution order:
+  #    1. clspv main HEAD             — drives our clspv build
+  #    2. LLVM SHA from clspv@HEAD's  — drives our LLVM build, transitively
+  #       deps.json                     pinned to the SAME clspv tree we
+  #                                     resolved in step 1
+  #    3. SPIRV-LLVM-Translator main  — its main branch tracks LLVM main
+  #       HEAD                          like clspv's pin, so co-evolves
+  #
+  #  All three SHAs feed cache keys for their respective builds, so any
+  #  upstream movement automatically invalidates the cache.
   # ================================================================
-  determine-llvm-sha:
-    name: Determine LLVM SHA (from clspv deps.json)
+  determine-shas:
+    name: Resolve upstream commits
     runs-on: ubuntu-latest
     outputs:
-      sha: ${{ steps.resolve.outputs.sha }}
+      llvm_sha: ${{ steps.resolve.outputs.llvm_sha }}
+      clspv_sha: ${{ steps.resolve.outputs.clspv_sha }}
+      translator_sha: ${{ steps.resolve.outputs.translator_sha }}
     steps:
       - id: resolve
         run: |
           set -e
-          SHA=$(curl -sSLf https://raw.githubusercontent.com/google/clspv/main/deps.json \
+
+          CLSPV_SHA=$(curl -sSLf https://api.github.com/repos/google/clspv/commits/main \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])')
+
+          # Read deps.json AT the resolved clspv SHA (not main HEAD again) —
+          # this is the load-bearing part of avoiding the race.
+          LLVM_SHA=$(curl -sSLf "https://raw.githubusercontent.com/google/clspv/$CLSPV_SHA/deps.json" \
             | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(c["commit"] for c in d["commits"] if c["name"]=="llvm"))')
-          if [ -z "$SHA" ]; then
-            echo "::error::Could not extract LLVM SHA from clspv deps.json"
-            exit 1
-          fi
-          echo "Resolved LLVM SHA: $SHA"
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "## LLVM Pin" >> $GITHUB_STEP_SUMMARY
-          echo "Building against LLVM commit \`$SHA\` (from clspv deps.json)" >> $GITHUB_STEP_SUMMARY
+
+          TRANSLATOR_SHA=$(curl -sSLf https://api.github.com/repos/KhronosGroup/SPIRV-LLVM-Translator/commits/main \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])')
+
+          for var in CLSPV_SHA LLVM_SHA TRANSLATOR_SHA; do
+            eval "val=\$$var"
+            if [ -z "$val" ]; then
+              echo "::error::Could not resolve $var"
+              exit 1
+            fi
+            echo "$var=$val"
+          done
+
+          {
+            echo "clspv_sha=$CLSPV_SHA"
+            echo "llvm_sha=$LLVM_SHA"
+            echo "translator_sha=$TRANSLATOR_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Pinned upstream commits"
+            echo "- clspv: \`$CLSPV_SHA\`"
+            echo "- LLVM: \`$LLVM_SHA\` (from clspv deps.json @ pinned commit)"
+            echo "- SPIRV-LLVM-Translator: \`$TRANSLATOR_SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ================================================================
   #  Verify upstream licenses haven't changed before building.
   #  If any license hash doesn't match, the entire release is blocked.
   # ================================================================
   verify-licenses:
-    needs: [determine-llvm-sha]
+    needs: [determine-shas]
     name: Verify Licenses
     runs-on: ubuntu-latest
     permissions:
@@ -114,20 +148,29 @@ jobs:
           git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Cross.git spirv-cross
           git clone --depth 1 https://github.com/gfx-rs/wgpu-native.git wgpu-native
           git clone --depth 1 https://github.com/gfx-rs/wgpu.git wgpu
-          git clone --depth 1 https://github.com/google/clspv.git clspv
-          # SPIRV-LLVM-Translator: we specifically track main (matches LLVM
-          # main via clspv's pin). Its llvm_release_* branches would drift.
-          git clone --depth 1 --branch main https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git spirv-llvm-translator
           # Mesa: only the spirv-to-dxil carve-out lands in our packages,
           # but the umbrella license text is what consumers reference.
           # Pin to the same release tag the build script uses so a Mesa
           # release with a license amendment is caught BEFORE the build.
           git clone --depth 1 --branch mesa-26.0.6 https://gitlab.freedesktop.org/mesa/mesa.git mesa
-          # LLVM: pinned to the exact commit determine-llvm-sha resolved from
-          # clspv's deps.json, so a license change at that exact commit is
-          # caught before the multi-hour build kicks off. `git clone --branch`
-          # doesn't accept arbitrary SHAs — use the codeload tarball endpoint.
-          LLVM_SHA="${{ needs.determine-llvm-sha.outputs.sha }}"
+
+          # clspv, SPIRV-LLVM-Translator, LLVM: pinned to the EXACT commits
+          # determine-shas resolved.  We can't use `git clone --branch <sha>`
+          # for arbitrary SHAs — codeload tarball endpoint instead, which
+          # also matches what the build scripts will pull.  This guarantees
+          # the licenses we verified are the licenses we actually shipped.
+          CLSPV_SHA="${{ needs.determine-shas.outputs.clspv_sha }}"
+          TRANSLATOR_SHA="${{ needs.determine-shas.outputs.translator_sha }}"
+          LLVM_SHA="${{ needs.determine-shas.outputs.llvm_sha }}"
+
+          echo "clspv license check target: $CLSPV_SHA"
+          curl -sSLf "https://codeload.github.com/google/clspv/tar.gz/$CLSPV_SHA" | tar -xz
+          mv "clspv-$CLSPV_SHA" clspv
+
+          echo "SPIRV-LLVM-Translator license check target: $TRANSLATOR_SHA"
+          curl -sSLf "https://codeload.github.com/KhronosGroup/SPIRV-LLVM-Translator/tar.gz/$TRANSLATOR_SHA" | tar -xz
+          mv "SPIRV-LLVM-Translator-$TRANSLATOR_SHA" spirv-llvm-translator
+
           echo "LLVM license check target: $LLVM_SHA"
           curl -sSLf "https://codeload.github.com/llvm/llvm-project/tar.gz/$LLVM_SHA" | tar -xz
           mv "llvm-project-$LLVM_SHA" llvm-project
@@ -684,7 +727,7 @@ jobs:
           path: ${{ runner.temp }}/output/spirv-to-dxil-${{ matrix.platform }}.tar.gz
 
   build-llvm:
-    needs: [verify-licenses, determine-llvm-sha]
+    needs: [verify-licenses, determine-shas]
     name: "Build LLVM (${{ matrix.platform }})"
     strategy:
       fail-fast: true
@@ -721,7 +764,7 @@ jobs:
           # Include the resolved LLVM SHA so a clspv bump (which changes the
           # SHA) invalidates the cache automatically — otherwise we'd ship
           # stale LLVM against a clspv that expects new APIs.
-          key: llvm-${{ matrix.platform }}-${{ needs.determine-llvm-sha.outputs.sha }}-${{ hashFiles('scripts/build-llvm.sh', 'scripts/common.sh') }}
+          key: llvm-${{ matrix.platform }}-${{ needs.determine-shas.outputs.llvm_sha }}-${{ hashFiles('scripts/build-llvm.sh', 'scripts/common.sh') }}
 
       - name: Install dependencies (Linux ARM64)
         if: steps.cache-llvm.outputs.cache-hit != 'true' && matrix.platform == 'linux-arm64'
@@ -760,7 +803,7 @@ jobs:
           OUTPUT_DIR="${{ runner.temp }}/output" \
           MACOS_ARCH="${{ matrix.macos_arch || '' }}" \
           WASM_BUILD="${{ matrix.wasm && '1' || '0' }}" \
-          LLVM_SHA="${{ needs.determine-llvm-sha.outputs.sha }}" \
+          LLVM_SHA="${{ needs.determine-shas.outputs.llvm_sha }}" \
           MENTAL_PLATFORM="${{ matrix.platform }}" bash scripts/build-llvm.sh
 
       - name: Build LLVM (Windows)
@@ -770,7 +813,7 @@ jobs:
           chmod +x scripts/build-llvm.sh
           BUILD_DIR="${{ runner.temp }}/build" \
           OUTPUT_DIR="${{ runner.temp }}/output" \
-          LLVM_SHA="${{ needs.determine-llvm-sha.outputs.sha }}" \
+          LLVM_SHA="${{ needs.determine-shas.outputs.llvm_sha }}" \
           MENTAL_PLATFORM="${{ matrix.platform }}" bash scripts/build-llvm.sh
 
       - name: Upload artifact
@@ -780,7 +823,7 @@ jobs:
           path: ${{ runner.temp }}/output/llvm-${{ matrix.platform }}.*
 
   build-clspv:
-    needs: [build-llvm]
+    needs: [build-llvm, determine-shas]
     name: "Build clspv (${{ matrix.platform }})"
     strategy:
       fail-fast: true
@@ -807,17 +850,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache clspv build
+        id: cache-clspv
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/output/clspv-${{ matrix.platform }}.*
+          # Key composition:
+          #   - platform: separate cache per target
+          #   - clspv_sha: rebuild when clspv main moves
+          #   - llvm_sha:  rebuild when LLVM (the linkage substrate) moves,
+          #                even if clspv itself didn't change — clspv
+          #                links against LLVM's internal headers and ABIs
+          #   - script hashes: rebuild when our build recipe changes
+          # All four dimensions are necessary; dropping any one ships
+          # mismatched binaries.
+          key: clspv-${{ matrix.platform }}-${{ needs.determine-shas.outputs.clspv_sha }}-${{ needs.determine-shas.outputs.llvm_sha }}-${{ hashFiles('scripts/build-clspv.sh', 'scripts/common.sh') }}
+
+      # Everything below is gated on cache miss — on a hit the cached
+      # tarball already lives at $RUNNER_TEMP/output and we skip straight
+      # to the upload step.  Notably this means we ALSO skip the LLVM
+      # download/extract on cache hit (~2 GB transfer + decompress saved).
+
       - name: Download LLVM
+        if: steps.cache-clspv.outputs.cache-hit != 'true'
         uses: actions/download-artifact@v4
         with:
           name: llvm-${{ matrix.platform }}
           path: artifacts
 
       - name: Extract LLVM
+        if: steps.cache-clspv.outputs.cache-hit != 'true'
         run: tar -xzf artifacts/llvm-${{ matrix.platform }}.tar.gz
 
       - name: Setup Python
-        if: runner.os != 'Windows'
+        if: steps.cache-clspv.outputs.cache-hit != 'true' && runner.os != 'Windows'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -825,7 +891,7 @@ jobs:
       - name: Install MinGW (Windows)
         # Must match the UCRT64 toolchain LLVM was built with, otherwise
         # LLVM's UCRT-decorated symbols (e.g. __imp__setjmp) won't resolve.
-        if: runner.os == 'Windows'
+        if: steps.cache-clspv.outputs.cache-hit != 'true' && runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -839,13 +905,13 @@ jobs:
             make
 
       - name: Install Emscripten (WASM)
-        if: matrix.wasm
+        if: steps.cache-clspv.outputs.cache-hit != 'true' && matrix.wasm
         uses: mymindstorm/setup-emsdk@v14
         with:
           version: "5.0.1"
 
       - name: Build clspv (Unix)
-        if: runner.os != 'Windows'
+        if: steps.cache-clspv.outputs.cache-hit != 'true' && runner.os != 'Windows'
         shell: bash
         run: |
           chmod +x scripts/build-clspv.sh
@@ -854,16 +920,18 @@ jobs:
           LLVM_BUILD_DIR="$(pwd)/llvm-${{ matrix.platform }}" \
           WASM_BUILD="${{ matrix.wasm && '1' || '0' }}" \
           MACOS_ARCH="${{ matrix.macos_arch || '' }}" \
+          CLSPV_SHA="${{ needs.determine-shas.outputs.clspv_sha }}" \
           MENTAL_PLATFORM="${{ matrix.platform }}" bash scripts/build-clspv.sh
 
       - name: Build clspv (Windows)
-        if: runner.os == 'Windows'
+        if: steps.cache-clspv.outputs.cache-hit != 'true' && runner.os == 'Windows'
         shell: msys2 {0}
         run: |
           chmod +x scripts/build-clspv.sh
           BUILD_DIR="${{ runner.temp }}/build" \
           OUTPUT_DIR="${{ runner.temp }}/output" \
           LLVM_BUILD_DIR="$(pwd)/llvm-${{ matrix.platform }}" \
+          CLSPV_SHA="${{ needs.determine-shas.outputs.clspv_sha }}" \
           MENTAL_PLATFORM="${{ matrix.platform }}" bash scripts/build-clspv.sh
 
       - name: Upload artifact
@@ -873,7 +941,7 @@ jobs:
           path: ${{ runner.temp }}/output/clspv-${{ matrix.platform }}.*
 
   build-spirv-llvm-translator:
-    needs: [build-llvm]
+    needs: [build-llvm, determine-shas]
     name: "Build SPIRV-LLVM-Translator (${{ matrix.platform }})"
     strategy:
       fail-fast: true
@@ -900,19 +968,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache SPIRV-LLVM-Translator build
+        id: cache-translator
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/output/spirv-llvm-translator-${{ matrix.platform }}.*
+          # Same key dimensions as clspv: platform + translator SHA + LLVM
+          # SHA + script hashes.  Translator's link contract with LLVM is
+          # the same kind of internal-API binding clspv has, so an LLVM
+          # bump must invalidate this cache too.
+          key: spirv-llvm-translator-${{ matrix.platform }}-${{ needs.determine-shas.outputs.translator_sha }}-${{ needs.determine-shas.outputs.llvm_sha }}-${{ hashFiles('scripts/build-spirv-llvm-translator.sh', 'scripts/common.sh') }}
+
       - name: Download LLVM
+        if: steps.cache-translator.outputs.cache-hit != 'true'
         uses: actions/download-artifact@v4
         with:
           name: llvm-${{ matrix.platform }}
           path: artifacts
 
       - name: Extract LLVM
+        if: steps.cache-translator.outputs.cache-hit != 'true'
         run: tar -xzf artifacts/llvm-${{ matrix.platform }}.tar.gz
 
       - name: Install MinGW (Windows)
         # Must match the UCRT64 toolchain LLVM was built with, otherwise
         # LLVM's UCRT-decorated symbols (e.g. __imp__setjmp) won't resolve.
-        if: runner.os == 'Windows'
+        if: steps.cache-translator.outputs.cache-hit != 'true' && runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -926,13 +1007,13 @@ jobs:
             make
 
       - name: Install Emscripten (WASM)
-        if: matrix.wasm
+        if: steps.cache-translator.outputs.cache-hit != 'true' && matrix.wasm
         uses: mymindstorm/setup-emsdk@v14
         with:
           version: "5.0.1"
 
       - name: Build SPIRV-LLVM-Translator (Unix)
-        if: runner.os != 'Windows'
+        if: steps.cache-translator.outputs.cache-hit != 'true' && runner.os != 'Windows'
         shell: bash
         run: |
           chmod +x scripts/build-spirv-llvm-translator.sh
@@ -941,16 +1022,18 @@ jobs:
           LLVM_BUILD_DIR="$(pwd)/llvm-${{ matrix.platform }}" \
           WASM_BUILD="${{ matrix.wasm && '1' || '0' }}" \
           MACOS_ARCH="${{ matrix.macos_arch || '' }}" \
+          TRANSLATOR_SHA="${{ needs.determine-shas.outputs.translator_sha }}" \
           MENTAL_PLATFORM="${{ matrix.platform }}" bash scripts/build-spirv-llvm-translator.sh
 
       - name: Build SPIRV-LLVM-Translator (Windows)
-        if: runner.os == 'Windows'
+        if: steps.cache-translator.outputs.cache-hit != 'true' && runner.os == 'Windows'
         shell: msys2 {0}
         run: |
           chmod +x scripts/build-spirv-llvm-translator.sh
           BUILD_DIR="${{ runner.temp }}/build" \
           OUTPUT_DIR="${{ runner.temp }}/output" \
           LLVM_BUILD_DIR="$(pwd)/llvm-${{ matrix.platform }}" \
+          TRANSLATOR_SHA="${{ needs.determine-shas.outputs.translator_sha }}" \
           MENTAL_PLATFORM="${{ matrix.platform }}" bash scripts/build-spirv-llvm-translator.sh
 
       - name: Upload artifact
@@ -1138,7 +1221,7 @@ jobs:
 
   determine-version:
     name: Determine Version
-    needs: [build-glslang, build-spirv-cross, build-llvm, build-clspv, build-spirv-llvm-translator, build-naga, download-wgpu-native]
+    needs: [build-glslang, build-spirv-cross, build-mesa-spirv-to-dxil, build-llvm, build-clspv, build-spirv-llvm-translator, build-naga, download-wgpu-native]
     runs-on: ubuntu-latest
     permissions:
       contents: write  # Need write permission to create and push tags

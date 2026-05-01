@@ -84,15 +84,33 @@ done
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-# Clone clspv
+# Clone clspv.
+#
+# Two modes:
+#   - CLSPV_SHA set        — pinned clone (cache-friendly: workflow's cache
+#                            key includes this SHA, so re-runs at the same
+#                            SHA hit the cache and re-runs after upstream
+#                            moves invalidate it).  Init + targeted fetch
+#                            avoids dragging clspv's full history.
+#   - CLSPV_SHA unset      — main HEAD clone (manual / local invocations).
+#                            No cache key — caller is on their own.
 if [ ! -d "clspv" ]; then
-    echo "Cloning clspv..."
-    set +e
-    git clone https://github.com/google/clspv.git
-    CLONE_EXIT=$?
-    set -e
-    if [ $CLONE_EXIT -ne 0 ] && [ ! -d "clspv/.git" ]; then
-        echo "Error: git clone failed"; exit 1
+    if [ -n "$CLSPV_SHA" ]; then
+        echo "Cloning clspv pinned to $CLSPV_SHA..."
+        mkdir clspv && (cd clspv && \
+            git init -q && \
+            git remote add origin https://github.com/google/clspv.git && \
+            git fetch --depth 1 -q origin "$CLSPV_SHA" && \
+            git checkout -q FETCH_HEAD)
+    else
+        echo "Cloning clspv (main HEAD; no SHA pin)..."
+        set +e
+        git clone https://github.com/google/clspv.git
+        CLONE_EXIT=$?
+        set -e
+        if [ $CLONE_EXIT -ne 0 ] && [ ! -d "clspv/.git" ]; then
+            echo "Error: git clone failed"; exit 1
+        fi
     fi
 fi
 
