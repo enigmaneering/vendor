@@ -20,16 +20,8 @@ across 7 targets (6 native + WebAssembly).
 | **clspv** | OpenCL C to Vulkan SPIR-V | [Google](https://github.com/google/clspv) |
 | **SPIRV-LLVM-Translator** | SPIR-V ↔ LLVM IR bridge | [Khronos](https://github.com/KhronosGroup/SPIRV-LLVM-Translator) |
 
-`spirv-to-dxil` is a carve-out of Mesa: we build only the
-`src/microsoft/spirv_to_dxil` library + its NIR / `dxil_compiler`
-dependencies, not the full driver stack.  MIT-licensed, NIR-based
-(no LLVM dependency), used by Mesa's Dozen driver (Vulkan-on-D3D12)
-and `microsoft-clc` (OpenCL on D3D12).  libmental's D3D12 backend
-feeds SPIR-V directly to it, replacing the older HLSL → DXIL via
-DXC subprocess path.  Shipped only for **Linux and Windows** targets:
-macOS doesn't have a D3D12 backend at runtime, and Mesa's
-`microsoft/compiler` headers (`<malloc.h>`, etc.) aren't
-macOS-portable anyway.
+**NOTE:** The `spirv-to-dxil` build only uses the `src/microsoft/spirv_to_dxil` library + its NIR / `dxil_compiler`
+dependencies, not the full library.
 
 ## Platforms
 
@@ -39,12 +31,7 @@ All tools except `spirv-to-dxil` are provided for:
 - Windows x86_64 / ARM64
 - WebAssembly
 
-`spirv-to-dxil` ships for **Linux x86_64 / ARM64 and Windows
-x86_64 / ARM64** — D3D12 is Windows-only at runtime, so it has no
-consumer on macOS or WASM, and Mesa's microsoft/compiler subtree
-isn't portable to those platforms anyway.  Windows ARM64 builds
-natively on the `windows-11-arm` GitHub runner via MSYS2's
-CLANGARM64 subsystem.
+**NOTE:** `spirv-to-dxil` is only used on Windows or WSL targets, as that's the only places where D3D12 lives.
 
 ## License
 
