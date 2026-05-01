@@ -150,14 +150,24 @@ meson setup build \
     -Dbuild-tests=false \
     -Ddefault_library=static
 
-# Build only the static archive target.  ninja will pull in just its
-# transitive deps (libnir.a, libvtn.a, libdxil_compiler.a, etc.) and
-# none of the unrelated Mesa code.
-ninja -C build -j"$NCPU" src/microsoft/spirv_to_dxil/libspirv_to_dxil.a
+# Build the static archive AND Mesa's own canonical CLI test wrapper
+# `spirv2dxil` (built from src/microsoft/spirv_to_dxil/spirv2dxil.c).
+# Shipping the CLI lets consumers do an A/B diagnostic: feed the same
+# SPIR-V to spirv2dxil's binary and to their own integration of
+# libspirv_to_dxil.a — if the CLI works and the integration crashes,
+# the bug is in the consumer; if both crash, the bug is in our Mesa
+# build itself.  ~1 MB extra in the package; cheap insurance.
+#
+# spirv2dxil's meson target is `executable('spirv2dxil', ...)` so the
+# ninja target name is the same on every platform — `.exe` extension
+# only appears in the produced filename, not the target.
+ninja -C build -j"$NCPU" \
+    src/microsoft/spirv_to_dxil/libspirv_to_dxil.a \
+    src/microsoft/spirv_to_dxil/spirv2dxil
 
 # Package
 PACKAGE_DIR="$OUTPUT_DIR/spirv-to-dxil-$PLATFORM"
-mkdir -p "$PACKAGE_DIR/lib" "$PACKAGE_DIR/include"
+mkdir -p "$PACKAGE_DIR/lib" "$PACKAGE_DIR/include" "$PACKAGE_DIR/bin"
 
 echo "Packaging spirv-to-dxil (static archive)..."
 
@@ -165,6 +175,27 @@ echo "Packaging spirv-to-dxil (static archive)..."
 # AND its meson-bundled dependencies (libnir.a, libvtn.a,
 # libdxil_compiler.a, etc., merged into the archive).
 cp build/src/microsoft/spirv_to_dxil/libspirv_to_dxil.a "$PACKAGE_DIR/lib/"
+
+# Mesa's spirv2dxil CLI binary — diagnostic A/B reference (see comment
+# above the ninja line).  Filename has `.exe` on Windows, no extension
+# on Linux; copy whichever shape ninja produced.  The ninja target
+# always succeeds in producing one or the other, so failing to find
+# either is a real packaging bug.
+SPIRV2DXIL_BIN=""
+for cand in build/src/microsoft/spirv_to_dxil/spirv2dxil.exe \
+            build/src/microsoft/spirv_to_dxil/spirv2dxil; do
+    if [ -f "$cand" ]; then
+        SPIRV2DXIL_BIN="$cand"
+        break
+    fi
+done
+if [ -z "$SPIRV2DXIL_BIN" ]; then
+    echo "Error: spirv2dxil binary was not produced under build/src/microsoft/spirv_to_dxil/"
+    find build/src/microsoft/spirv_to_dxil -maxdepth 1 -type f 2>/dev/null
+    exit 1
+fi
+cp "$SPIRV2DXIL_BIN" "$PACKAGE_DIR/bin/"
+echo "Packaged $(basename "$SPIRV2DXIL_BIN") ($(stat -f%z "$SPIRV2DXIL_BIN" 2>/dev/null || stat -c%s "$SPIRV2DXIL_BIN") bytes)"
 
 # Public headers consumers #include.
 #
@@ -191,6 +222,11 @@ if [ ! -f "$PACKAGE_DIR/lib/libspirv_to_dxil.a" ]; then
     echo "Error: libspirv_to_dxil.a was not produced by Mesa's build."
     echo "Build tree contents under microsoft/spirv_to_dxil:"
     find build/src/microsoft/spirv_to_dxil -type f 2>/dev/null
+    exit 1
+fi
+# Same for the spirv2dxil CLI — package layout requires both lib/ and bin/.
+if [ -z "$(ls -A "$PACKAGE_DIR/bin/" 2>/dev/null)" ]; then
+    echo "Error: $PACKAGE_DIR/bin/ is empty (spirv2dxil binary missing)"
     exit 1
 fi
 if [ ! -f "$PACKAGE_DIR/include/spirv_to_dxil.h" ]; then
