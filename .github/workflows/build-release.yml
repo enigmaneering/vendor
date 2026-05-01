@@ -745,10 +745,12 @@ jobs:
             platform: linux-arm64
           - runner: windows-latest
             platform: windows-amd64
-            mingw_arch: x86_64
+            msys_subsystem: UCRT64
+            mingw_pkg_prefix: x86_64
           - runner: windows-11-arm
             platform: windows-arm64
-            mingw_arch: x86_64
+            msys_subsystem: CLANGARM64
+            mingw_pkg_prefix: clang-aarch64
           - runner: ubuntu-latest
             platform: wasm
             wasm: true
@@ -764,7 +766,13 @@ jobs:
           # Include the resolved LLVM SHA so a clspv bump (which changes the
           # SHA) invalidates the cache automatically — otherwise we'd ship
           # stale LLVM against a clspv that expects new APIs.
-          key: llvm-${{ matrix.platform }}-${{ needs.determine-shas.outputs.llvm_sha }}-${{ hashFiles('scripts/build-llvm.sh', 'scripts/common.sh') }}
+          # `mingw_pkg_prefix` busts the cache when the Windows toolchain
+          # changes (e.g. windows-arm64 switching from x86_64-UCRT64 to
+          # clang-aarch64-CLANGARM64) — without this, the existing cache
+          # would serve a binary built for the wrong arch.  Empty on
+          # non-Windows platforms; doesn't affect their key uniqueness
+          # since matrix.platform is already distinct.
+          key: llvm-${{ matrix.platform }}-${{ needs.determine-shas.outputs.llvm_sha }}-${{ matrix.mingw_pkg_prefix }}-${{ hashFiles('scripts/build-llvm.sh', 'scripts/common.sh') }}
 
       - name: Install dependencies (Linux ARM64)
         if: steps.cache-llvm.outputs.cache-hit != 'true' && matrix.platform == 'linux-arm64'
@@ -775,16 +783,22 @@ jobs:
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
 
       - name: Install MinGW (Windows)
+        # windows-amd64 uses UCRT64 (x86_64 GCC + LLVM tools); windows-arm64
+        # uses CLANGARM64 (native arm64 Clang + LLD).  Each subsystem ships
+        # its own per-prefix package set — packages installed here MUST
+        # match the subsystem, otherwise pacman silently downloads the wrong
+        # arch and the resulting artifact contains x86_64 binaries
+        # mislabeled as arm64 (the bug v0.0.67 shipped with).
         if: steps.cache-llvm.outputs.cache-hit != 'true' && runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: UCRT64
+          msystem: ${{ matrix.msys_subsystem }}
           install: >-
-            mingw-w64-${{ matrix.mingw_arch }}-cmake
-            mingw-w64-${{ matrix.mingw_arch }}-ninja
-            mingw-w64-${{ matrix.mingw_arch }}-python
-            mingw-w64-${{ matrix.mingw_arch }}-clang
-            mingw-w64-${{ matrix.mingw_arch }}-lld
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-cmake
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-ninja
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-python
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-clang
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-lld
             git
             make
 
@@ -841,8 +855,12 @@ jobs:
             platform: linux-arm64
           - runner: windows-latest
             platform: windows-amd64
+            msys_subsystem: UCRT64
+            mingw_pkg_prefix: x86_64
           - runner: windows-11-arm
             platform: windows-arm64
+            msys_subsystem: CLANGARM64
+            mingw_pkg_prefix: clang-aarch64
           - runner: ubuntu-latest
             platform: wasm
             wasm: true
@@ -864,7 +882,9 @@ jobs:
           #   - script hashes: rebuild when our build recipe changes
           # All four dimensions are necessary; dropping any one ships
           # mismatched binaries.
-          key: clspv-${{ matrix.platform }}-${{ needs.determine-shas.outputs.clspv_sha }}-${{ needs.determine-shas.outputs.llvm_sha }}-${{ hashFiles('scripts/build-clspv.sh', 'scripts/common.sh') }}
+          # mingw_pkg_prefix busts the cache when the Windows toolchain
+          # changes (see matching comment in build-llvm's cache step).
+          key: clspv-${{ matrix.platform }}-${{ needs.determine-shas.outputs.clspv_sha }}-${{ needs.determine-shas.outputs.llvm_sha }}-${{ matrix.mingw_pkg_prefix }}-${{ hashFiles('scripts/build-clspv.sh', 'scripts/common.sh') }}
 
       # Everything below is gated on cache miss — on a hit the cached
       # tarball already lives at $RUNNER_TEMP/output and we skip straight
@@ -889,18 +909,21 @@ jobs:
           python-version: '3.12'
 
       - name: Install MinGW (Windows)
-        # Must match the UCRT64 toolchain LLVM was built with, otherwise
-        # LLVM's UCRT-decorated symbols (e.g. __imp__setjmp) won't resolve.
+        # Must match the toolchain LLVM was built with — UCRT64 on
+        # windows-amd64, CLANGARM64 on windows-arm64.  Mismatching
+        # subsystems means LLVM's CRT-decorated symbols (e.g.
+        # __imp__setjmp) won't resolve, OR the clspv compile picks up
+        # the wrong arch.
         if: steps.cache-clspv.outputs.cache-hit != 'true' && runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: UCRT64
+          msystem: ${{ matrix.msys_subsystem }}
           install: >-
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-python
-            mingw-w64-x86_64-clang
-            mingw-w64-x86_64-lld
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-cmake
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-ninja
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-python
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-clang
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-lld
             git
             make
 
@@ -959,8 +982,12 @@ jobs:
             platform: linux-arm64
           - runner: windows-latest
             platform: windows-amd64
+            msys_subsystem: UCRT64
+            mingw_pkg_prefix: x86_64
           - runner: windows-11-arm
             platform: windows-arm64
+            msys_subsystem: CLANGARM64
+            mingw_pkg_prefix: clang-aarch64
           - runner: ubuntu-latest
             platform: wasm
             wasm: true
@@ -977,7 +1004,9 @@ jobs:
           # SHA + script hashes.  Translator's link contract with LLVM is
           # the same kind of internal-API binding clspv has, so an LLVM
           # bump must invalidate this cache too.
-          key: spirv-llvm-translator-${{ matrix.platform }}-${{ needs.determine-shas.outputs.translator_sha }}-${{ needs.determine-shas.outputs.llvm_sha }}-${{ hashFiles('scripts/build-spirv-llvm-translator.sh', 'scripts/common.sh') }}
+          # mingw_pkg_prefix busts the cache when the Windows toolchain
+          # changes (see matching comment in build-llvm's cache step).
+          key: spirv-llvm-translator-${{ matrix.platform }}-${{ needs.determine-shas.outputs.translator_sha }}-${{ needs.determine-shas.outputs.llvm_sha }}-${{ matrix.mingw_pkg_prefix }}-${{ hashFiles('scripts/build-spirv-llvm-translator.sh', 'scripts/common.sh') }}
 
       - name: Download LLVM
         if: steps.cache-translator.outputs.cache-hit != 'true'
@@ -991,18 +1020,19 @@ jobs:
         run: tar -xzf artifacts/llvm-${{ matrix.platform }}.tar.gz
 
       - name: Install MinGW (Windows)
-        # Must match the UCRT64 toolchain LLVM was built with, otherwise
-        # LLVM's UCRT-decorated symbols (e.g. __imp__setjmp) won't resolve.
+        # Must match the toolchain LLVM was built with — UCRT64 on
+        # windows-amd64, CLANGARM64 on windows-arm64.  Same rationale
+        # as the matching install step in build-clspv.
         if: steps.cache-translator.outputs.cache-hit != 'true' && runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: UCRT64
+          msystem: ${{ matrix.msys_subsystem }}
           install: >-
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-python
-            mingw-w64-x86_64-clang
-            mingw-w64-x86_64-lld
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-cmake
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-ninja
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-python
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-clang
+            mingw-w64-${{ matrix.mingw_pkg_prefix }}-lld
             git
             make
 
