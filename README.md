@@ -20,7 +20,7 @@ across 7 targets (6 native + WebAssembly).
 | **clspv** | OpenCL C to Vulkan SPIR-V | [Google](https://github.com/google/clspv) |
 | **SPIRV-LLVM-Translator** | SPIR-V ↔ LLVM IR bridge | [Khronos](https://github.com/KhronosGroup/SPIRV-LLVM-Translator) |
 
-**NOTE:** The `spirv-to-dxil` build only uses the `src/microsoft/spirv_to_dxil` library + its NIR / `dxil_compiler`
+**NOTE:** The `spirv-to-dxil` build only uses the `src/microsoft/spirv_to_dxil` code and its NIR / `dxil_compiler`
 dependencies, not the full library.
 
 ## Platforms
