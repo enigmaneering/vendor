@@ -166,10 +166,16 @@ echo "Packaging spirv-to-dxil (static archive)..."
 # libdxil_compiler.a, etc., merged into the archive).
 cp build/src/microsoft/spirv_to_dxil/libspirv_to_dxil.a "$PACKAGE_DIR/lib/"
 
-# Public header — the only thing libmental's CMakeLists needs to
-# include.  spirv_to_dxil.h is self-contained and pulls in its own
-# small dependency surface (stdint, stdbool).
+# Public headers consumers #include.
+#
+# spirv_to_dxil.h is the main API entry point.  It transitively
+# #include's "dxil_versions.h" (which lives in src/microsoft/compiler/,
+# not src/microsoft/spirv_to_dxil/), so we package both into the same
+# include/ directory — the path-suffix `compiler` is dropped because
+# spirv_to_dxil.h's #include is `"dxil_versions.h"` (no subdir),
+# which the compiler resolves relative to the includer's directory.
 cp src/microsoft/spirv_to_dxil/spirv_to_dxil.h "$PACKAGE_DIR/include/"
+cp src/microsoft/compiler/dxil_versions.h     "$PACKAGE_DIR/include/"
 
 # Mesa's primary license text — preserved with its original .rst
 # extension so consumers can match it against the upstream file we
@@ -189,6 +195,12 @@ if [ ! -f "$PACKAGE_DIR/lib/libspirv_to_dxil.a" ]; then
 fi
 if [ ! -f "$PACKAGE_DIR/include/spirv_to_dxil.h" ]; then
     echo "Error: spirv_to_dxil.h is missing from the package"
+    exit 1
+fi
+if [ ! -f "$PACKAGE_DIR/include/dxil_versions.h" ]; then
+    echo "Error: dxil_versions.h is missing from the package"
+    echo "       (spirv_to_dxil.h transitively #includes it; if libmental"
+    echo "        consumers can't find it, backend_d3d12.cpp fails to compile)"
     exit 1
 fi
 
