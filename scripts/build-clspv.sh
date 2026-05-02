@@ -158,9 +158,9 @@ if [ "$IS_WASM" -eq 1 ]; then
     # clspv's cmake (clspv/cmake/CMakeLists.txt) hardcodes the lookup at
     #   $CLSPV_EXTERNAL_LIBCLC_DIR/spir--/libclc.bc        (32-bit)
     #   $CLSPV_EXTERNAL_LIBCLC_DIR/spir64--/libclc.bc      (64-bit)
-    # We build libclc with LLVM_RUNTIMES_TARGET=clspv--/clspv64-- (the
-    # modern build-time triples libclc accepts). libclc internally maps
-    # those to spir--/spir64-- in the install layout:
+    # We build libclc with LLVM_DEFAULT_TARGET_TRIPLE=clspv--/clspv64--
+    # (the modern build-time triples libclc accepts). libclc internally
+    # maps those to spir--/spir64-- in the install layout:
     #   $LIBCLC_INSTALL/share/clc/spir--/libclc.bc
     #   $LIBCLC_INSTALL/share/clc/spir64--/libclc.bc
     # — exactly what clspv wants, so we set CLSPV_EXTERNAL_LIBCLC_DIR to
@@ -169,10 +169,18 @@ if [ "$IS_WASM" -eq 1 ]; then
     if [ ! -f "$LIBCLC_SHARE/spir--/libclc.bc" ] || [ ! -f "$LIBCLC_SHARE/spir64--/libclc.bc" ]; then
         echo "=== WASM libclc prep: building clspv-- and clspv64-- bitcode ==="
         rm -rf "$LIBCLC_BUILD"
-        # libclc's CMake (commit 121f5a96ff38) changed from accepting a
-        # list via LIBCLC_TARGETS_TO_BUILD to a single target per configure
-        # via LLVM_RUNTIMES_TARGET. To get both 32-bit and 64-bit bitcode
-        # we do TWO configure + build + install cycles, one per triple.
+        # libclc's CMake API has churned twice in our window:
+        #   - Originally:  list via LIBCLC_TARGETS_TO_BUILD
+        #   - clspv pin    single target via LLVM_RUNTIMES_TARGET
+        #     121f5a96ff38: (broke the original LIBCLC_TARGETS_TO_BUILD
+        #                    list interface)
+        #   - clspv pin    single target via LLVM_DEFAULT_TARGET_TRIPLE
+        #     7189c4bb83…   (libclc/CMakeLists.txt now does
+        #                    LIBCLC_TARGET = LLVM_DEFAULT_TARGET_TRIPLE
+        #                    and FATAL_ERROR's "libclc target is empty"
+        #                    if it's missing)
+        # We do TWO configure + build + install cycles, one per triple,
+        # passing the current API's variable name.
         #
         # Tool discovery in this libclc version splits two ways:
         # - enable_language(CLC) via CMakeCLCInformation.cmake: calls
@@ -200,6 +208,7 @@ if [ "$IS_WASM" -eq 1 ]; then
                     -DCMAKE_INSTALL_PREFIX="$LIBCLC_INSTALL" \
                     -DCMAKE_C_COMPILER="$NATIVE_BIN/clang" \
                     -DCMAKE_CXX_COMPILER="$NATIVE_BIN/clang++" \
+                    -DLLVM_DEFAULT_TARGET_TRIPLE="$triple" \
                     -DLLVM_RUNTIMES_TARGET="$triple" \
                     -DLLVM_DIR="$LLVM_BUILD/lib/cmake/llvm" \
                     -DLLVM_TOOL_opt="$NATIVE_BIN/opt" \
